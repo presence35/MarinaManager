@@ -571,7 +571,12 @@ module.exports = async function createApp() {
     res.json(db.prepare(`${CARD_SELECT} WHERE sc.wrap_required=1 AND sc.wrap_done=0 AND sc.status IN ('fall_checklist','storage') ORDER BY c.name`).all());
   });
 
-  // ─── EXPORT ───────────────────────────────────────────────────────────────────
+  // ─── VERSION ──────────────────────────────────────────────────────────────────
+  app.get('/api/version', (req, res) => {
+    res.json({ version: require('./package.json').version });
+  });
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
   app.get('/api/export', requireAdmin, (req, res) => {
     const archiver = require('archiver');
     res.attachment(`marina-backup-${new Date().toISOString().split('T')[0]}.zip`);
@@ -603,7 +608,7 @@ if (require.main === module) {
     const server = app.listen(PORT, '0.0.0.0', () => {
       const ifaces = require('os').networkInterfaces();
       const localIP = Object.values(ifaces).flat().find(i => i.family === 'IPv4' && !i.internal)?.address || 'localhost';
-      console.log(`\n\u2693 Marina Repair App`);
+      console.log(`\n\u2693 Marina Manager`);
       console.log(`   Local:   http://localhost:${PORT}`);
       console.log(`   Network: http://${localIP}:${PORT}`);
       console.log(`   Default admin PIN: 0000\n`);

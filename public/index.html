@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="theme-color" content="#0a4f6e"/>
-<title>Marina Repair</title>
+<title>Marina Manager</title>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet"/>
@@ -184,7 +184,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 .theme-preview{height:60px;position:relative;overflow:hidden}
 .theme-meta{padding:10px 12px;background:var(--surface)}
 .theme-name{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--text);margin-bottom:6px}
-.day-night-toggle{display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden}
+.day-night-toggle{display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;margin:0 16px 4px}
 .dnt-btn{flex:1;padding:5px 0;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;border:none;background:var(--surface2);color:var(--text3);cursor:pointer;transition:all .15s;text-transform:uppercase}
 .dnt-btn.active{background:var(--primary);color:#fff}
 /* EMPLOYEE CARD */
@@ -486,7 +486,7 @@ function LoginScreen({ onLogin }) {
       <div style={{ textAlign:'center', marginBottom:40 }}>
         <div style={{ fontSize:48, marginBottom:12 }}>⚓</div>
         <div style={{ fontFamily:'Bebas Neue', fontSize:32, letterSpacing:3, color:'var(--primary)' }}>
-          MARINA REPAIR
+          MARINA MANAGER
         </div>
         <div style={{ fontFamily:'Barlow Condensed', fontSize:13, fontWeight:600, letterSpacing:1, color:'var(--text3)', textTransform:'uppercase', marginTop:4 }}>
           Enter your PIN
@@ -1743,10 +1743,19 @@ function SettingsScreen() {
   const { theme, darkMode, setTheme, setDarkMode } = useContext(ThemeCtx);
   const { employee, logout } = useContext(AuthCtx);
   const { navigate } = useContext(NavCtx);
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    fetch('/api/version').then(r => r.json()).then(d => setVersion(d.version)).catch(() => {});
+  }, []);
 
   return (
     <div>
       <div className="section-head">Theme</div>
+      <div className="day-night-toggle">
+        <button className={`dnt-btn ${!darkMode ? 'active' : ''}`} onClick={() => setDarkMode(false)}>☀️ Day</button>
+        <button className={`dnt-btn ${darkMode ? 'active' : ''}`} onClick={() => setDarkMode(true)}>🌙 Night</button>
+      </div>
       <div className="theme-grid">
         {THEMES.map(t => {
           const colors = THEME_PREVIEW_COLORS[t.id][darkMode ? 'night' : 'day'];
@@ -1766,10 +1775,6 @@ function SettingsScreen() {
               </div>
               <div className="theme-meta">
                 <div className="theme-name">{t.name}</div>
-                <div className="day-night-toggle">
-                  <button className={`dnt-btn ${!darkMode ? 'active' : ''}`} onClick={e => { e.stopPropagation(); setDarkMode(false); }}>☀️ Day</button>
-                  <button className={`dnt-btn ${darkMode ? 'active' : ''}`} onClick={e => { e.stopPropagation(); setDarkMode(true); }}>🌙 Night</button>
-                </div>
               </div>
             </div>
           );
@@ -1809,7 +1814,7 @@ function SettingsScreen() {
       </div>
 
       <div style={{ textAlign:'center', padding:'24px 16px', fontFamily:'Barlow Condensed', fontSize:11, fontWeight:600, color:'var(--text3)', letterSpacing:.5 }}>
-        MARINA REPAIR v1.0 · CAMPBELL'S LANDING
+        MARINA MANAGER v{version} · CAMPBELL'S LANDING
       </div>
     </div>
   );
@@ -1979,7 +1984,7 @@ function AppShell() {
   }, []);
 
   const SCREEN_TITLES = {
-    dashboard: { title:'Marina Repair', sub: null },
+    dashboard: { title:'Marina Manager', sub: null },
     cards:     { title:'Service Cards', sub: null },
     card:      { title:'Service Card',  sub: null },
     'new-card':{ title:'New Card',      sub: null },
