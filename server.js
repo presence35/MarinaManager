@@ -3,10 +3,47 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const initSqlJs = require('sql.js');
+
+let SQL;
+
+class Database {
+  constructor(dbPath) {
+    this.path = dbPath;
+    this.db = new SQL.Database(fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined);
+  }
+  exec(sql) { this.db.exec(sql); this._save(); }
+  prepare(sql) {
+    const stmt = this.db.prepare(sql);
+    const _db = this;
+    return {
+      get(...p) {
+        if (p.length) stmt.bind(p);
+        const r = stmt.step() ? stmt.getAsObject() : undefined;
+        stmt.reset();
+        return r;
+      },
+      all(...p) {
+        if (p.length) stmt.bind(p);
+        const r = [];
+        while (stmt.step()) r.push(stmt.getAsObject());
+        stmt.reset();
+        return r;
+      },
+      run(...p) {
+        stmt.bind(p); stmt.step(); stmt.reset();
+        _db._save();
+        const res = _db.db.exec('SELECT last_insert_rowid() id, changes() changes');
+        return { lastInsertRowid: res[0].values[0][0], changes: res[0].values[0][1] };
+      },
+    };
+  }
+  close() { this._save(); this.db.close(); }
+  _save() { fs.writeFileSync(this.path, Buffer.from(this.db.export())); }
+}
 
 module.exports = async function createApp() {
-  const { init, Database } = require('./db-compat');
-  await init();
+  SQL = await initSqlJs();
 
   const app = express();
   const PORT = process.env.PORT || 3000;
