@@ -283,6 +283,20 @@ const CONDITIONS = [
   { key:'lower_unit', label:'Lower Unit' },
 ];
 
+const CLEANING_ITEMS = [
+  { cat:'Interior', items:[
+    { key:'int_quick_wipe', label:'Quick Wipe' },
+    { key:'int_power_wash', label:'Power Wash' },
+    { key:'int_spotless',   label:'Make It Shiny & Spotless' },
+  ]},
+  { cat:'Exterior', items:[
+    { key:'ext_quick_wipe',   label:'Quick Wipe' },
+    { key:'ext_power_wash',   label:'Power Wash' },
+    { key:'ext_algae_wax',    label:'Algae Strip & Wax' },
+    { key:'ext_buff_polish',  label:'Buff / Polish' },
+  ]},
+];
+
 const FALL_CHECKLIST = [
   { cat:'Engine', items:[
     { key:'oil_check_engine',   label:'Check engine oil level' },
@@ -749,6 +763,7 @@ function CardDetailScreen({ params = {} }) {
   const tabs = [
     { key:'info', label:'Info' },
     { key:'work', label:'Authorized' },
+    { key:'cleaning', label:'Cleaning' },
     { key:'items', label:'Items' },
     { key:'logs', label:'Log' },
     { key:'checklist', label:'Checklist' },
@@ -814,6 +829,7 @@ function CardDetailScreen({ params = {} }) {
       {/* Tab content */}
       {tab === 'info' && <InfoTab card={card} reload={reload}/>}
       {tab === 'work' && <WorkTab card={card} reload={reload}/>}
+      {tab === 'cleaning' && <CleaningTab card={card} reload={reload}/>}
       {tab === 'items' && <ItemsTab card={card} reload={reload}/>}
       {tab === 'logs' && <LogsTab card={card} reload={reload}/>}
       {tab === 'checklist' && <ChecklistTab card={card} reload={reload}/>}
@@ -1075,6 +1091,70 @@ function WorkTab({ card, reload }) {
       <div style={{ padding:'10px 16px', fontFamily:'Barlow Condensed', fontSize:11, fontWeight:600, color:'var(--text3)', letterSpacing:.3 }}>
         Tap to authorize · Hold to mark complete
       </div>
+    </div>
+  );
+}
+
+// CLEANING TAB
+function CleaningTab({ card, reload }) {
+  const showToast = useContext(ToastCtx);
+  const [work, setWork] = useState(card.authorized_work || []);
+
+  const toggle = async (key, field) => {
+    const updated = work.map(w => w.service_type === key ? { ...w, [field]: w[field] ? 0 : 1 } : w);
+    setWork(updated);
+    try {
+      await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) });
+    } catch(e) { showToast('Save failed'); reload(); }
+  };
+
+  return (
+    <div>
+      <div style={{ padding:'12px 16px 8px', fontFamily:'Barlow Condensed', fontSize:12, fontWeight:700, letterSpacing:.5, color:'var(--text3)', textTransform:'uppercase' }}>
+        Tap to authorize · Long-press to mark complete
+      </div>
+      {CLEANING_ITEMS.map(group => (
+        <div key={group.cat} style={{ margin:'0 12px 12px' }}>
+          <div style={{ fontFamily:'Barlow Condensed', fontSize:14, fontWeight:700, letterSpacing:.5, color:'var(--text2)', textTransform:'uppercase', padding:'14px 4px 6px', borderBottom:'1px solid var(--border)' }}>
+            {group.cat}
+          </div>
+          <div className="card" style={{ marginTop:6 }}>
+            {group.items.map((w, i) => {
+              const entry = work.find(x => x.service_type === w.key) || {};
+              const authorized = !!entry.authorized;
+              const completed = !!entry.completed;
+              return (
+                <div key={w.key}
+                  onClick={() => toggle(w.key, 'authorized')}
+                  onContextMenu={e => { e.preventDefault(); toggle(w.key, 'completed'); }}
+                  style={{
+                    display:'flex', alignItems:'center', padding:'14px 16px',
+                    borderBottom: i < group.items.length-1 ? '1px solid var(--border)' : 'none',
+                    cursor:'pointer', background: completed ? 'rgba(45,168,79,.07)' : authorized ? 'rgba(0,180,216,.05)' : 'transparent',
+                    transition:'background .15s',
+                  }}
+                >
+                  <div style={{
+                    width:28, height:28, borderRadius:8, flexShrink:0, marginRight:12,
+                    background: completed ? 'var(--success)' : authorized ? 'var(--accent)' : 'var(--surface2)',
+                    border: `2px solid ${completed ? 'var(--success)' : authorized ? 'var(--accent)' : 'var(--border)'}`,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                  }}>
+                    {(authorized || completed) && <Icon name="check" size={14} color="#fff"/>}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:15, fontWeight:600, color: completed ? 'var(--success)' : authorized ? 'var(--text)' : 'var(--text3)', textDecoration: completed ? 'line-through' : 'none' }}>
+                      {w.label}
+                    </div>
+                    {completed && <div style={{ fontFamily:'Barlow Condensed', fontSize:11, fontWeight:700, letterSpacing:.5, color:'var(--success)', textTransform:'uppercase' }}>COMPLETE</div>}
+                    {authorized && !completed && <div style={{ fontFamily:'Barlow Condensed', fontSize:11, fontWeight:700, letterSpacing:.5, color:'var(--accent)', textTransform:'uppercase' }}>AUTHORIZED</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

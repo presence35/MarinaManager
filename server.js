@@ -440,6 +440,7 @@ module.exports = async function createApp() {
 
   const RECEIVED_ITEMS = ['battery', 'keys', 'cover', 'paddles', 'life_jackets', 'cushions', 'gas_cans', 'tie_ropes', 'lights'];
   const SERVICES = ['oil_change', 'outdrive_service', 'tune_up', 'lower_unit_drain', 'prop_rebuild', 'pickup', 'delivery', 'algae_strip', 'wax', 'shrink_wrap'];
+  const CLEANING_SERVICES = ['int_quick_wipe', 'int_power_wash', 'int_spotless', 'ext_quick_wipe', 'ext_power_wash', 'ext_algae_wax', 'ext_buff_polish'];
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
   app.post('/api/cards', requireAuth, (req, res) => {
@@ -454,6 +455,7 @@ module.exports = async function createApp() {
     RECEIVED_ITEMS.forEach(item => ii.run(cardId, item));
     const iw = db.prepare('INSERT OR IGNORE INTO authorized_work (card_id, service_type) VALUES (?, ?)');
     SERVICES.forEach(s => iw.run(cardId, s));
+    CLEANING_SERVICES.forEach(s => iw.run(cardId, s));
     const ic = db.prepare('INSERT OR IGNORE INTO condition_assessment (card_id, area) VALUES (?, ?)');
     CONDITIONS.forEach(a => ic.run(cardId, a));
     db.prepare('INSERT INTO status_history (card_id, to_status, employee_id) VALUES (?, ?, ?)').run(cardId, 'intake', req.employee.id);
