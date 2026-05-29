@@ -1,5 +1,5 @@
 const CACHE_NAME = 'marina-v1';
-const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
+const STATIC_ASSETS = ['/', '/index.html', '/manifest.json', '/logo.png', '/icon-192.png', '/icon-512.png', '/favicon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS)));
