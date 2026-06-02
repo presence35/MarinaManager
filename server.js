@@ -603,7 +603,7 @@ module.exports = async function createApp() {
 };
 
 if (require.main === module) {
-  const PORT = process.env.PORT || 3456;
+  const PORT = process.env.PORT || 3000;
   module.exports().then(app => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       const ifaces = require('os').networkInterfaces();

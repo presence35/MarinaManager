@@ -764,7 +764,7 @@ function CardDetailScreen({ params = {} }) {
   const nextStatus = STATUS_ORDER[STATUS_ORDER.indexOf(card.status) + 1];
   const tabs = [
     { key:'info', label:'Info' },
-    { key:'work', label:'Authorized' },
+    { key:'work', label:'Service' },
     { key:'cleaning', label:'Cleaning' },
     { key:'items', label:'Items' },
     { key:'logs', label:'Log' },
@@ -805,7 +805,7 @@ function CardDetailScreen({ params = {} }) {
       </div>
 
       {/* Next status button */}
-      {nextStatus && nextStatus !== 'archived' && (
+      {nextStatus && (
         <div style={{ padding:'10px 12px 0' }}>
           <button
             className="btn btn-accent"
@@ -814,7 +814,7 @@ function CardDetailScreen({ params = {} }) {
             style={{ opacity: saving ? .7 : 1 }}
           >
             <Icon name="check" size={16} color="#fff"/>
-            Mark as {STATUS_CONFIG[nextStatus].label}
+            Move to {STATUS_CONFIG[nextStatus].label}
           </button>
         </div>
       )}
@@ -1037,26 +1037,65 @@ function ConditionRatingRow({ area, cardId, initialRating, initialNotes, reload 
   );
 }
 
-// WORK AUTHORIZED TAB
+// WORK AUTHORIZED TAB // NOW SERVICE
 function WorkTab({ card, reload }) {
   const showToast = useContext(ToastCtx);
   const [work, setWork] = useState(card.authorized_work || []);
+  const [customTask, setCustomTask] = useState('');
 
   const toggle = async (key, field) => {
-    const updated = work.map(w => w.service_type === key ? { ...w, [field]: w[field] ? 0 : 1 } : w);
+    const existing = work.find(w => w.service_type === key);
+    let updated;
+    if (existing) {
+      updated = work.map(w => w.service_type === key ? { ...w, [field]: w[field] ? 0 : 1 } : w);
+    } else {
+      updated = [...work, { service_type: key, [field]: 1 }];
+    }
     setWork(updated);
     try {
       await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) });
     } catch(e) { showToast('Save failed'); reload(); }
   };
 
+  const addCustomTask = async (e) => {
+    e.preventDefault();
+    if (!customTask.trim()) return;
+    const taskName = customTask.trim();
+    if (work.find(w => w.service_type === taskName)) return; // prevent dupes
+    const updated = [...work, { service_type: taskName, authorized: 1, completed: 0 }];
+    setWork(updated);
+    setCustomTask('');
+    try {
+      await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) });
+    } catch(e) { showToast('Save failed'); reload(); }
+  };
+
+  const standardKeys = new Set([...AUTHORIZED_WORK.map(w => w.key), ...CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key))]);
+  const customItems = work.filter(w => !standardKeys.has(w.service_type));
+
+  const allDisplayItems = [
+    ...AUTHORIZED_WORK,
+    ...customItems.map(w => ({ key: w.service_type, label: w.service_type }))
+  ];
+
   return (
     <div>
-      <div style={{ padding:'12px 16px 8px', fontFamily:'Barlow Condensed', fontSize:12, fontWeight:700, letterSpacing:.5, color:'var(--text3)', textTransform:'uppercase' }}>
+      <form onSubmit={addCustomTask} style={{ padding:'12px 16px 4px', display:'flex', gap:8 }}>
+        <input 
+          type="text" 
+          value={customTask} 
+          onChange={e => setCustomTask(e.target.value)} 
+          placeholder="New custom service task..." 
+          style={{ flex:1, background:'var(--surface2)', border:'1.5px solid var(--border)', borderRadius:6, padding:'10px 12px', fontSize:15, color:'var(--text)', outline:'none' }}
+        />
+        <button type="submit" disabled={!customTask.trim()} style={{ background:'var(--accent)', color:'#fff', border:'none', borderRadius:6, padding:'0 16px', fontFamily:'Barlow Condensed', fontWeight:700, textTransform:'uppercase', cursor:'pointer' }}>Add</button>
+      </form>
+
+      <div style={{ padding:'8px 16px 8px', fontFamily:'Barlow Condensed', fontSize:12, fontWeight:700, letterSpacing:.5, color:'var(--text3)', textTransform:'uppercase' }}>
         Tap to authorize · Long-press to mark complete
       </div>
       <div className="card" style={{ margin:'0 12px' }}>
-        {AUTHORIZED_WORK.map((w, i) => {
+        {allDisplayItems.map((w, i) => {
           const entry = work.find(x => x.service_type === w.key) || {};
           const authorized = !!entry.authorized;
           const completed = !!entry.completed;
@@ -1066,7 +1105,7 @@ function WorkTab({ card, reload }) {
               onContextMenu={e => { e.preventDefault(); toggle(w.key, 'completed'); }}
               style={{
                 display:'flex', alignItems:'center', padding:'14px 16px',
-                borderBottom: i < AUTHORIZED_WORK.length-1 ? '1px solid var(--border)' : 'none',
+                borderBottom: i < allDisplayItems.length-1 ? '1px solid var(--border)' : 'none',
                 cursor:'pointer', background: completed ? 'rgba(45,168,79,.07)' : authorized ? 'rgba(0,180,216,.05)' : 'transparent',
                 transition:'background .15s',
               }}
@@ -1084,7 +1123,7 @@ function WorkTab({ card, reload }) {
                   {w.label}
                 </div>
                 {completed && <div style={{ fontFamily:'Barlow Condensed', fontSize:11, fontWeight:700, letterSpacing:.5, color:'var(--success)', textTransform:'uppercase' }}>COMPLETE</div>}
-                {authorized && !completed && <div style={{ fontFamily:'Barlow Condensed', fontSize:11, fontWeight:700, letterSpacing:.5, color:'var(--accent)', textTransform:'uppercase' }}>AUTHORIZED</div>}
+                {authorized && !completed && <div style={{ fontFamily:'Barlow Condensed', fontSize:11, fontWeight:700, letterSpacing:.5, color:'var(--accent)', textTransform:'uppercase' }}>SERVICE</div>}
               </div>
             </div>
           );
