@@ -1,0 +1,65 @@
+1399:      function getToken() {
+1403:      async function api(method, path, body, isFormData) {
+1729:      function ToastProvider({ children }) {
+1746:      function LoginScreen({ onLogin }) {
+1763:                JSON.stringify(data.employee),
+1765:              onLogin(data.employee);
+1879:      function DashboardScreen() {
+1881:        const { employee } = useContext(AuthCtx);
+1930:                {employee?.name}
+2082:            {(employee?.role === "admin" || employee?.role === "office") && (
+2097:      function CardsScreen({ params = {} }) {
+2099:        const { employee } = useContext(AuthCtx);
+2133:              {(employee?.role === "admin" || employee?.role === "office") && (
+2290:      function CardDetailScreen({ params = {} }) {
+2292:        const { employee } = useContext(AuthCtx);
+2530:      function InfoTab({ card, reload }) {
+2659:              {(employee?.role === "admin" || employee?.role === "office") && (
+3069:      function ConditionRatingRow({
+3106:      function SwipeableTask({
+3319:      function WorkTab({ card, reload }) {
+3482:      function CleaningTab({ card, reload }) {
+3564:      function ItemsTab({ card, reload }) {
+3618:      function LogsTab({ card, reload }) {
+3621:        const { employee } = useContext(AuthCtx);
+3689:                      {(employee.role === "admin" ||
+3690:                        employee.id === log.employee_id) && (
+3743:      function ChecklistTab({ card, reload }) {
+3853:      function PhotosTab({ card, reload }) {
+3855:        const { employee } = useContext(AuthCtx);
+4040:      function NewLogScreen({ params = {} }) {
+4042:        const { employee } = useContext(AuthCtx);
+4304:      function NewCustomerScreen() {
+4388:      function NewBoatScreen({ params = {} }) {
+4490:      function NewCardScreen({ params = {} }) {
+5063:      function CustomersScreen() {
+5065:        const { employee } = useContext(AuthCtx);
+5164:              {(employee?.role === "admin" || employee?.role === "office") && (
+5185:                        if (employee?.role === "admin" || employee?.role === "office") setEditingCustomer(c);
+5192:                      cursor: (employee?.role === "admin" || employee?.role === "office") ? "pointer" : "default"
+5212:      function BoatsScreen() {
+5214:        const { employee } = useContext(AuthCtx);
+5244:              {(employee?.role === "admin" || employee?.role === "office") && (
+5288:      function SettingsScreen() {
+5290:        const { employee, logout } = useContext(AuthCtx);
+5391:                  {employee?.initials ||
+5392:                    employee?.name?.slice(0, 2).toUpperCase()}
+5403:                    {employee?.name}
+5411:                      color: ROLE_COLORS[employee?.role] || "var(--text3)",
+5415:                    {employee?.role}
+5420:              {employee?.role === "admin" && (
+5458:              {employee?.role === "admin" && (
+5540:      function AdminScreen() {
+5765:      function MapScreen() {
+5886:      function AppShell() {
+5887:        const { employee, logout } = useContext(AuthCtx);
+5992:                  {employee?.initials}
+6020:      function ThemeProvider({ children }) {
+6055:      function AuthProvider({ children }) {
+6056:        const [employee, setEmployee] = useState(() => {
+6079:          <AuthCtx.Provider value={{ employee, login, logout }}>
+6086:      function App() {
+6087:        const { employee, login } = useContext(AuthCtx);
+6091:          if (employee && getToken()) {
+6103:        if (!employee) return <LoginScreen onLogin={login} />;
+6107:      function Root() {

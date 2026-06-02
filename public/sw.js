@@ -1,4 +1,4 @@
-const CACHE_NAME = 'marina-v1';
+const CACHE_NAME = 'marina-v5';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json', '/logo.png', '/icon-192.png', '/icon-512.png', '/favicon.png'];
 
 self.addEventListener('install', e => {

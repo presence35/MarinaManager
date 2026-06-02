@@ -1,0 +1,49 @@
+1417:          localStorage.removeItem("marina_employee");
+1762:                "marina_employee",
+1763:                JSON.stringify(data.employee),
+1765:              onLogin(data.employee);
+1881:        const { employee } = useContext(AuthCtx);
+1930:                {employee?.name}
+2082:            {(employee?.role === "admin" || employee?.role === "office") && (
+2099:        const { employee } = useContext(AuthCtx);
+2133:              {(employee?.role === "admin" || employee?.role === "office") && (
+2292:        const { employee } = useContext(AuthCtx);
+2659:              {(employee?.role === "admin" || employee?.role === "office") && (
+3621:        const { employee } = useContext(AuthCtx);
+3673:                        {log.employee_initials || "??"}
+3685:                          {log.employee_name}
+3689:                      {(employee.role === "admin" ||
+3690:                        employee.id === log.employee_id) && (
+3855:        const { employee } = useContext(AuthCtx);
+4042:        const { employee } = useContext(AuthCtx);
+5065:        const { employee } = useContext(AuthCtx);
+5164:              {(employee?.role === "admin" || employee?.role === "office") && (
+5185:                        if (employee?.role === "admin" || employee?.role === "office") setEditingCustomer(c);
+5192:                      cursor: (employee?.role === "admin" || employee?.role === "office") ? "pointer" : "default"
+5214:        const { employee } = useContext(AuthCtx);
+5244:              {(employee?.role === "admin" || employee?.role === "office") && (
+5290:        const { employee, logout } = useContext(AuthCtx);
+5391:                  {employee?.initials ||
+5392:                    employee?.name?.slice(0, 2).toUpperCase()}
+5403:                    {employee?.name}
+5411:                      color: ROLE_COLORS[employee?.role] || "var(--text3)",
+5415:                    {employee?.role}
+5420:              {employee?.role === "admin" && (
+5458:              {employee?.role === "admin" && (
+5542:        const [employees, setEmployees] = useState([]);
+5553:          api("GET", "/employees")
+5571:            await api("POST", "/employees", newEmp);
+5588:            await api("PUT", `/employees/${emp.id}`, { active: !emp.active });
+5704:              {employees.map((emp, i) => (
+5710:                      i < employees.length - 1
+5887:        const { employee, logout } = useContext(AuthCtx);
+5992:                  {employee?.initials}
+6056:        const [employee, setEmployee] = useState(() => {
+6058:            return JSON.parse(localStorage.getItem("marina_employee"));
+6066:          localStorage.setItem("marina_employee", JSON.stringify(emp));
+6074:          localStorage.removeItem("marina_employee");
+6079:          <AuthCtx.Provider value={{ employee, login, logout }}>
+6087:        const { employee, login } = useContext(AuthCtx);
+6091:          if (employee && getToken()) {
+6098:                localStorage.removeItem("marina_employee");
+6103:        if (!employee) return <LoginScreen onLogin={login} />;

@@ -31,10 +31,16 @@ class Database {
         return r;
       },
       run(...p) {
-        stmt.bind(p); stmt.step(); stmt.reset();
-        _db._save();
+        try {
+          _db.db.run(sql, p);
+        } catch (err) {
+          throw err;
+        }
         const res = _db.db.exec('SELECT last_insert_rowid() id, changes() changes');
-        return { lastInsertRowid: res[0].values[0][0], changes: res[0].values[0][1] };
+        const lastInsertRowid = res[0].values[0][0];
+        const changes = res[0].values[0][1];
+        _db._save();
+        return { lastInsertRowid, changes };
       },
     };
   }
@@ -231,6 +237,14 @@ module.exports = async function createApp() {
     const pinHash = crypto.createHash('sha256').update('0000').digest('hex');
     db.prepare(`INSERT INTO employees (name, role, initials, pin_hash) VALUES ('Admin', 'admin', 'AD', ?)`).run(pinHash);
     console.log('  \u2713 Default admin created \u2014 PIN: 0000');
+    
+    // Seed default customer, boat and card for testing scenarios
+    const custRes = db.prepare(`INSERT INTO customers (name, phone, email) VALUES ('John Doe', '555-0101', 'john@example.com')`).run();
+    const customerId = custRes.lastInsertRowid;
+    const boatRes = db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, length_ft) VALUES (?, 'Sea Breeze', 'Yamaha 200', 'Sea Ray 240', 24)`).run(customerId);
+    const boatId = boatRes.lastInsertRowid;
+    db.prepare(`INSERT INTO service_cards (boat_id, season_year, work_order_no) VALUES (?, ?, ?)`).run(boatId, new Date().getFullYear(), 'WO-1000');
+    console.log('  \u2713 Default customer, boat, and service card seeded');
   }
 
   // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
@@ -265,6 +279,13 @@ module.exports = async function createApp() {
   function requireAdmin(req, res, next) {
     requireAuth(req, res, () => {
       if (req.employee.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+      next();
+    });
+  }
+
+  function requireEditor(req, res, next) {
+    requireAuth(req, res, () => {
+      if (req.employee.role !== 'admin' && req.employee.role !== 'office') return res.status(403).json({ error: 'Admin or office only' });
       next();
     });
   }
@@ -341,14 +362,14 @@ module.exports = async function createApp() {
     res.json(customer);
   });
 
-  app.post('/api/customers', requireAuth, (req, res) => {
+  app.post('/api/customers', requireEditor, (req, res) => {
     const { name, address = null, city = null, postal_code = null, phone = null, email = null } = req.body;
     if (!name) return res.status(400).json({ error: 'Name required' });
     const r = db.prepare(`INSERT INTO customers (name, address, city, postal_code, phone, email) VALUES (?, ?, ?, ?, ?, ?)`).run(name, address, city, postal_code, phone, email);
     res.json({ id: r.lastInsertRowid, name, phone });
   });
 
-  app.put('/api/customers/:id', requireAuth, (req, res) => {
+  app.put('/api/customers/:id', requireEditor, (req, res) => {
     const { name, address, city, postal_code, phone, email } = req.body;
     const updates = [];
     const params = [];
@@ -363,14 +384,34 @@ module.exports = async function createApp() {
   });
 
   // ─── BOATS ────────────────────────────────────────────────────────────────────
-  app.post('/api/boats', requireAuth, (req, res) => {
+  app.get('/api/boats', requireAuth, (req, res) => {
+    const { q } = req.query;
+    if (q) {
+      res.json(db.prepare(`
+        SELECT b.*, c.name as customer_name 
+        FROM boats b 
+        LEFT JOIN customers c ON b.customer_id = c.id 
+        WHERE b.name LIKE ? OR c.name LIKE ? 
+        ORDER BY b.name LIMIT 30
+      `).all(`%${q}%`, `%${q}%`));
+    } else {
+      res.json(db.prepare(`
+        SELECT b.*, c.name as customer_name 
+        FROM boats b 
+        LEFT JOIN customers c ON b.customer_id = c.id 
+        ORDER BY b.name
+      `).all());
+    }
+  });
+
+  app.post('/api/boats', requireEditor, (req, res) => {
     const { customer_id, name = null, motor_type = null, serial_no = null, model = null, licence = null, rate_type = 'SW', length_ft = null } = req.body;
     if (!customer_id) return res.status(400).json({ error: 'Customer required' });
     const r = db.prepare(`INSERT INTO boats (customer_id, name, motor_type, serial_no, model, licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, serial_no, model, licence, rate_type, length_ft);
     res.json({ id: r.lastInsertRowid });
   });
 
-  app.put('/api/boats/:id', requireAuth, (req, res) => {
+  app.put('/api/boats/:id', requireEditor, (req, res) => {
     const { name, motor_type, serial_no, model, licence, rate_type, length_ft } = req.body;
     const updates = [];
     const params = [];
@@ -443,7 +484,7 @@ module.exports = async function createApp() {
   const CLEANING_SERVICES = ['int_quick_wipe', 'int_power_wash', 'int_spotless', 'ext_quick_wipe', 'ext_power_wash', 'ext_algae_wax', 'ext_buff_polish'];
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
-  app.post('/api/cards', requireAuth, (req, res) => {
+  app.post('/api/cards', requireEditor, (req, res) => {
     const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in } = req.body;
     if (!boat_id) return res.status(400).json({ error: 'Boat required' });
     const r = db.prepare(`
@@ -466,7 +507,16 @@ module.exports = async function createApp() {
     const id = req.params.id;
     const card = db.prepare('SELECT status FROM service_cards WHERE id = ?').get(id);
     if (!card) return res.status(404).json({ error: 'Not found' });
+
+    const isEditor = req.employee.role === 'admin' || req.employee.role === 'office';
     const { status, storage_type, storage_location, wrap_required, wrap_done, remarks, other_work, date_out, invoice_number, work_order_no } = req.body;
+    
+    if (!isEditor) {
+       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'wrap_done', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no'];
+       const hasProtected = protectedKeys.some(k => req.body[k] !== undefined);
+       if (hasProtected) return res.status(403).json({ error: 'Only admin and office can edit relevant data' });
+    }
+
     if (status && status !== card.status) {
       db.prepare('INSERT INTO status_history (card_id, from_status, to_status, employee_id) VALUES (?, ?, ?, ?)').run(id, card.status, status, req.employee.id);
     }
@@ -483,7 +533,12 @@ module.exports = async function createApp() {
 
   app.put('/api/cards/:id/items', requireAuth, (req, res) => {
     const upd = db.prepare('UPDATE received_items SET present=?, notes=? WHERE card_id=? AND item=?');
-    (req.body.items || []).forEach(({ item, present, notes }) => upd.run(present ? 1 : 0, notes || null, req.params.id, item));
+    const ins = db.prepare('INSERT INTO received_items (card_id, item, present, notes) VALUES (?, ?, ?, ?)');
+    (req.body.items || []).forEach(({ item, present, notes }) => {
+      const pCount = present ? 1 : 0;
+      const r = upd.run(pCount, notes || null, req.params.id, item);
+      if (r.changes === 0) ins.run(req.params.id, item, pCount, notes || null);
+    });
     res.json({ ok: true });
   });
 
