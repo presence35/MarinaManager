@@ -103,6 +103,7 @@ module.exports = async function createApp() {
       serial_no TEXT,
       model TEXT,
       licence TEXT,
+      trailer_licence TEXT,
       rate_type TEXT DEFAULT 'SW',
       length_ft REAL,
       FOREIGN KEY (customer_id) REFERENCES customers(id)
@@ -230,6 +231,9 @@ module.exports = async function createApp() {
       FOREIGN KEY (current_card_id) REFERENCES service_cards(id)
     );
   `);
+
+  // Migrate: add trailer_licence if missing
+  try { db.exec('ALTER TABLE boats ADD COLUMN trailer_licence TEXT'); } catch(e) {}
 
   // Seed default admin if none exist
   const empCount = db.prepare('SELECT COUNT(*) as c FROM employees').get();
@@ -405,14 +409,14 @@ module.exports = async function createApp() {
   });
 
   app.post('/api/boats', requireEditor, (req, res) => {
-    const { customer_id, name = null, motor_type = null, serial_no = null, model = null, licence = null, rate_type = 'SW', length_ft = null } = req.body;
+    const { customer_id, name = null, motor_type = null, serial_no = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
     if (!customer_id) return res.status(400).json({ error: 'Customer required' });
-    const r = db.prepare(`INSERT INTO boats (customer_id, name, motor_type, serial_no, model, licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, serial_no, model, licence, rate_type, length_ft);
+    const r = db.prepare(`INSERT INTO boats (customer_id, name, motor_type, serial_no, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, serial_no, model, licence, trailer_licence, rate_type, length_ft);
     res.json({ id: r.lastInsertRowid });
   });
 
   app.put('/api/boats/:id', requireEditor, (req, res) => {
-    const { name, motor_type, serial_no, model, licence, rate_type, length_ft } = req.body;
+    const { name, motor_type, serial_no, model, licence, trailer_licence, rate_type, length_ft } = req.body;
     const updates = [];
     const params = [];
     if (name !== undefined) { updates.push('name = ?'); params.push(name); }
@@ -420,6 +424,7 @@ module.exports = async function createApp() {
     if (serial_no !== undefined) { updates.push('serial_no = ?'); params.push(serial_no); }
     if (model !== undefined) { updates.push('model = ?'); params.push(model); }
     if (licence !== undefined) { updates.push('licence = ?'); params.push(licence); }
+    if (trailer_licence !== undefined) { updates.push('trailer_licence = ?'); params.push(trailer_licence); }
     if (rate_type !== undefined) { updates.push('rate_type = ?'); params.push(rate_type); }
     if (length_ft !== undefined) { updates.push('length_ft = ?'); params.push(length_ft); }
     if (updates.length) db.prepare(`UPDATE boats SET ${updates.join(', ')} WHERE id=?`).run(...params, req.params.id);
@@ -431,7 +436,7 @@ module.exports = async function createApp() {
     SELECT sc.*,
       c.name as customer_name, c.phone as customer_phone, c.email as customer_email,
       c.address, c.city, c.postal_code, c.id as customer_id,
-      b.name as boat_name, b.motor_type, b.model, b.serial_no, b.licence, b.length_ft, b.rate_type,
+      b.name as boat_name, b.motor_type, b.model, b.serial_no, b.licence, b.trailer_licence, b.length_ft, b.rate_type,
       e.name as created_by_name
     FROM service_cards sc
     JOIN boats b ON sc.boat_id = b.id

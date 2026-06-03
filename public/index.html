@@ -50,8 +50,7 @@
         --warn: #e07b39;
         --danger: #d64045;
         --info: #7c6fcd;
-        --nav-h: 68px;
-        --hdr-h: 56px;
+        --nav-h: 52px;
         --safe-bottom: env(safe-area-inset-bottom, 0px);
         --r: 14px;
         --r2: 10px;
@@ -178,52 +177,6 @@
         height: 100dvh;
         overflow: hidden;
       }
-      .header {
-        display: flex;
-        align-items: center;
-        padding: 0 12px;
-        height: var(--hdr-h);
-        background: var(--primary);
-        gap: 10px;
-        flex-shrink: 0;
-        padding-top: env(safe-area-inset-top, 0);
-      }
-      .header-title {
-        font-family: "Bebas Neue", sans-serif;
-        font-size: 22px;
-        letter-spacing: 1.5px;
-        color: #fff;
-        flex: 1;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .header-sub {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.65);
-        font-family: "Barlow Condensed", sans-serif;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        margin-top: -2px;
-      }
-      .header-btn {
-        width: 40px;
-        height: 40px;
-        border: none;
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        cursor: pointer;
-        font-size: 18px;
-        flex-shrink: 0;
-        transition: background 0.15s;
-      }
-      .header-btn:active {
-        background: rgba(255, 255, 255, 0.25);
-      }
       .screen-body {
         flex: 1;
         overflow-y: auto;
@@ -248,19 +201,12 @@
       .nav-item {
         flex: 1;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 3px;
         border: none;
         background: none;
         color: var(--text3);
         cursor: pointer;
-        font-family: "Barlow Condensed", sans-serif;
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
         padding: 0;
         transition: color 0.15s;
       }
@@ -268,8 +214,8 @@
         color: var(--primary);
       }
       .nav-item svg {
-        width: 22px;
-        height: 22px;
+        width: 24px;
+        height: 24px;
       }
       .nav-fab {
         position: absolute;
@@ -1120,6 +1066,7 @@
         useState,
         useEffect,
         useCallback,
+        useMemo,
         useRef,
         createContext,
         useContext,
@@ -1129,6 +1076,12 @@
       const STATUS_CONFIG = {
         intake: {
           label: "INTAKE",
+          color: "#7c6fcd",
+          bg: "rgba(124,111,205,.15)",
+          stripe: "#7c6fcd",
+        },
+        authorized: {
+          label: "AUTHORIZED",
           color: "#7c6fcd",
           bg: "rgba(124,111,205,.15)",
           stripe: "#7c6fcd",
@@ -1144,6 +1097,18 @@
           color: "#5b9bd5",
           bg: "rgba(91,155,213,.15)",
           stripe: "#5b9bd5",
+        },
+        service: {
+          label: "SERVICE",
+          color: "#e07b39",
+          bg: "rgba(224,123,57,.15)",
+          stripe: "#e07b39",
+        },
+        cleaning: {
+          label: "CLEANING",
+          color: "#52b788",
+          bg: "rgba(82,183,136,.15)",
+          stripe: "#52b788",
         },
         spring_checklist: {
           label: "SPRING CHECK",
@@ -1170,7 +1135,7 @@
           stripe: "#888",
         },
       };
-      const STATUS_ORDER = Object.keys(STATUS_CONFIG);
+      const STATUS_ORDER = ["intake","authorized","fall_checklist","storage","service","cleaning","spring_checklist","ready","invoiced","archived"];
 
       const THEMES = [
         {
@@ -1382,10 +1347,12 @@
       ];
 
       const STORAGE_TYPES = [
-        { key: "dry_land", label: "Dry Land", icon: "🏗️" },
         { key: "boathouse", label: "Boathouse", icon: "🏠" },
-        { key: "covered", label: "Covered", icon: "🏕️" },
-        { key: "water", label: "In Water", icon: "⛵" },
+        { key: "parking_blocks", label: "Parking Lot (on blocks)", icon: "🅿️" },
+        { key: "parking_trailer", label: "Parking Lot (on trailer)", icon: "🅿️" },
+        { key: "compound_blocks", label: "Compound (on blocks)", icon: "🏗️" },
+        { key: "compound_trailer", label: "Compound (on trailer)", icon: "🏗️" },
+        { key: "storage_building", label: "Storage Building", icon: "🏢" },
       ];
 
       const ROLE_COLORS = {
@@ -1449,7 +1416,7 @@
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           ),
-          list: (
+          "id-card": (
             <svg
               width={size}
               height={size}
@@ -1460,12 +1427,11 @@
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <line x1="8" y1="6" x2="21" y2="6" />
-              <line x1="8" y1="12" x2="21" y2="12" />
-              <line x1="8" y1="18" x2="21" y2="18" />
-              <line x1="3" y1="6" x2="3.01" y2="6" />
-              <line x1="3" y1="12" x2="3.01" y2="12" />
-              <line x1="3" y1="18" x2="3.01" y2="18" />
+              <path d="M16 10h2" />
+              <path d="M16 14h2" />
+              <path d="M6.17 15a3 3 0 0 1 5.66 0" />
+              <circle cx="9" cy="11" r="2" />
+              <rect x="2" y="5" width="20" height="14" rx="2" />
             </svg>
           ),
           plus: (
@@ -1498,7 +1464,7 @@
               <line x1="16" y1="6" x2="16" y2="22" />
             </svg>
           ),
-          settings: (
+          "ship-wheel": (
             <svg
               width={size}
               height={size}
@@ -1509,8 +1475,16 @@
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              <circle cx="12" cy="12" r="8" />
+              <path d="M12 2v7.5" />
+              <path d="m19 5-5.23 5.23" />
+              <path d="M22 12h-7.5" />
+              <path d="m19 19-5.23-5.23" />
+              <path d="M12 14.5V22" />
+              <path d="M10.23 13.77 5 19" />
+              <path d="M9.5 12H2" />
+              <path d="M10.23 10.23 5 5" />
+              <circle cx="12" cy="12" r="2.5" />
             </svg>
           ),
           back: (
@@ -1618,6 +1592,22 @@
               <path d="M5 12H2a10 10 0 0 0 20 0h-3" />
             </svg>
           ),
+          sailboat: (
+            <svg
+              width={size}
+              height={size}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={color}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10 2v15" />
+              <path d="M7 22a4 4 0 0 1-4-4 1 1 0 0 1 1-1h16a1 1 0 0 1 1 1 4 4 0 0 1-4 4z" />
+              <path d="M9.159 2.46a1 1 0 0 1 1.521-.193l9.977 8.98A1 1 0 0 1 20 13H4a1 1 0 0 1-.824-1.567z" />
+            </svg>
+          ),
           edit: (
             <svg
               width={size}
@@ -1706,6 +1696,18 @@
               strokeLinejoin="round"
             >
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            </svg>
+          ),
+          "arrow-left": (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          ),
+          "arrow-right": (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14" />
+              <polyline points="12 5 19 12 12 19" />
             </svg>
           ),
         };
@@ -1876,223 +1878,6 @@
       }
 
       // ─── DASHBOARD SCREEN ─────────────────────────────────────────────────────────
-      function DashboardScreen() {
-        const { navigate } = useContext(NavCtx);
-        const { employee } = useContext(AuthCtx);
-        const [stats, setStats] = useState(null);
-        const [wrapQueue, setWrapQueue] = useState([]);
-
-        useEffect(() => {
-          Promise.all([api("GET", "/cards"), api("GET", "/wrap-queue")])
-            .then(([cards, wq]) => {
-              const s = {};
-              STATUS_ORDER.forEach((st) => (s[st] = 0));
-              cards.forEach((c) => {
-                if (s[c.status] !== undefined) s[c.status]++;
-              });
-              setStats({ total: cards.length, ...s });
-              setWrapQueue(wq);
-            })
-            .catch(() => {});
-        }, []);
-
-        return (
-          <div>
-            {/* Greeting banner */}
-            <div
-              style={{
-                background: "var(--primary)",
-                color: "#fff",
-                padding: "16px 16px 20px",
-                margin: "0 0 0 0",
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "Barlow Condensed",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: 0.5,
-                  opacity: 0.7,
-                  textTransform: "uppercase",
-                }}
-              >
-                Good day,
-              </div>
-              <div
-                style={{
-                  fontFamily: "Bebas Neue",
-                  fontSize: 28,
-                  letterSpacing: 2,
-                  marginTop: 2,
-                }}
-              >
-                {employee?.name}
-              </div>
-              {stats && (
-                <div
-                  style={{
-                    fontFamily: "Barlow Condensed",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    letterSpacing: 0.5,
-                    opacity: 0.7,
-                    marginTop: 4,
-                  }}
-                >
-                  {stats.total} ACTIVE CARDS · {stats.ready} READY ·{" "}
-                  {stats.invoiced} INVOICED
-                </div>
-              )}
-            </div>
-
-            {/* Status pipeline overview */}
-            <div className="section-head">Pipeline</div>
-            <div
-              style={{
-                padding: "0 12px 12px",
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 8,
-              }}
-            >
-              {STATUS_ORDER.filter((s) => s !== "archived").map((s) => {
-                const cfg = STATUS_CONFIG[s];
-                return (
-                  <button
-                    key={s}
-                    onClick={() => navigate("cards", { filterStatus: s })}
-                    style={{
-                      background: "var(--surface)",
-                      border: `1.5px solid var(--border)`,
-                      borderRadius: "var(--r)",
-                      padding: "12px 14px",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      transition: "transform .1s",
-                      display: "block",
-                    }}
-                    onTouchStart={(e) =>
-                      (e.currentTarget.style.transform = "scale(.97)")
-                    }
-                    onTouchEnd={(e) => (e.currentTarget.style.transform = "")}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "Bebas Neue",
-                        fontSize: 28,
-                        color: cfg.color,
-                        lineHeight: 1,
-                      }}
-                    >
-                      {stats ? stats[s] : "–"}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "Barlow Condensed",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: 0.8,
-                        color: "var(--text3)",
-                        textTransform: "uppercase",
-                        marginTop: 3,
-                      }}
-                    >
-                      {cfg.label}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Wrap queue */}
-            {wrapQueue.length > 0 && (
-              <>
-                <div
-                  className="section-head"
-                  style={{ display: "flex", alignItems: "center", gap: 8 }}
-                >
-                  <span>Wrap Queue</span>
-                  <span
-                    style={{
-                      background: "var(--warn)",
-                      color: "#fff",
-                      borderRadius: 20,
-                      padding: "1px 8px",
-                      fontFamily: "Barlow Condensed",
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {wrapQueue.length}
-                  </span>
-                </div>
-                <div className="card" style={{ margin: "0 12px 10px" }}>
-                  {wrapQueue.slice(0, 5).map((c, i) => (
-                    <div
-                      key={c.id}
-                      onClick={() => navigate("card", { id: c.id })}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        padding: "12px 16px",
-                        borderBottom:
-                          i < Math.min(wrapQueue.length, 5) - 1
-                            ? "1px solid var(--border)"
-                            : "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <Icon name="wrap" size={16} color="var(--warn)" />
-                      <div style={{ marginLeft: 10, flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontFamily: "Bebas Neue",
-                            fontSize: 16,
-                            letterSpacing: 1,
-                            color: "var(--text)",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {c.boat_name || "(no name)"}
-                        </div>
-                        <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                          {c.customer_name}
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: "Barlow Condensed",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "var(--text3)",
-                          marginLeft: 8,
-                        }}
-                      >
-                        ›
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {(employee?.role === "admin" || employee?.role === "office") && (
-            <div style={{ padding: "0 12px 16px" }}>
-              <button
-                className="btn btn-accent"
-                onClick={() => navigate("new-card")}
-              >
-                <Icon name="plus" size={18} color="#fff" /> New Service Card
-              </button>
-            </div>
-            )}
-          </div>
-        );
-      }
-
       // ─── CARDS LIST SCREEN ────────────────────────────────────────────────────────
       function CardsScreen({ params = {} }) {
         const { navigate } = useContext(NavCtx);
@@ -2321,6 +2106,22 @@
           }
         };
 
+        const retreatStatus = async () => {
+          const idx = STATUS_ORDER.indexOf(card.status);
+          if (idx > 0) {
+            const prev = STATUS_ORDER[idx - 1];
+            setSaving(true);
+            try {
+              await api("PUT", `/cards/${card.id}`, { status: prev });
+              showToast(`Status ← ${STATUS_CONFIG[prev].label}`);
+              reload();
+            } catch (e) {
+              showToast("Failed to update");
+            }
+            setSaving(false);
+          }
+        };
+
         if (!card)
           return (
             <div style={{ padding: 20 }}>
@@ -2332,41 +2133,46 @@
           );
 
         const cfg = STATUS_CONFIG[card.status];
-        const nextStatus = STATUS_ORDER[STATUS_ORDER.indexOf(card.status) + 1];
+        const statusIdx = STATUS_ORDER.indexOf(card.status);
+        const nextStatus = STATUS_ORDER[statusIdx + 1];
+        const prevStatus = STATUS_ORDER[statusIdx - 1];
 
         const getTabBadge = (key) => {
           if (!card) return null;
-          if (key === 'work') {
-            const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)));
-            const active = (card.authorized_work || []).filter(w => (w.authorized || w.completed) && !cleanKeys.has(w.service_type));
-            return active.length > 0 ? active.length : null;
+          if (key === 'authorized') {
+            const total = (card.authorized_work || []).filter(w => w.authorized).length;
+            return total > 0 ? total : null;
           }
-          if (key === 'cleaning') {
+          if (key === 'service_work') {
             const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)));
-            const active = (card.authorized_work || []).filter(w => (w.authorized || w.completed) && cleanKeys.has(w.service_type));
-            return active.length > 0 ? active.length : null;
+            const completed = (card.authorized_work || []).filter(w => w.completed && !cleanKeys.has(w.service_type));
+            const total = (card.authorized_work || []).filter(w => w.authorized && !cleanKeys.has(w.service_type));
+            return total.length > 0 ? `${completed.length}/${total.length}` : null;
           }
-          if (key === 'items') {
-            const active = (card.received_items || []).filter(i => i.present);
-            return active.length > 0 ? active.length : null;
+          if (key === 'cleaning_work') {
+            const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)));
+            const completed = (card.authorized_work || []).filter(w => w.completed && cleanKeys.has(w.service_type));
+            const total = (card.authorized_work || []).filter(w => w.authorized && cleanKeys.has(w.service_type));
+            return total.length > 0 ? `${completed.length}/${total.length}` : null;
           }
           if (key === 'logs') {
             return (card.work_logs || []).length > 0 ? card.work_logs.length : null;
           }
-          if (key === 'checklist') {
-            const season = card.status === 'spring_checklist' || card.status === 'ready' ? 'spring' : 'fall';
-            const existing = (card.checklists || []).find(c => c.checklist_type === season);
-            let checked = 0;
-            let total = 0;
-            if (season === 'fall') total = FALL_CHECKLIST.reduce((acc, cat) => acc + cat.items.length, 0);
-            else total = SPRING_CHECKLIST.reduce((acc, cat) => acc + cat.items.length, 0);
+          if (key === 'fall_checklist') {
+            const existing = (card.checklists || []).find(c => c.checklist_type === 'fall');
+            let checked = 0, total = FALL_CHECKLIST.reduce((acc, cat) => acc + cat.items.length, 0);
             if (existing) {
-              try {
-                const items = JSON.parse(existing.items_json || '{}');
-                checked = Object.keys(items).filter(k => items[k]).length;
-              } catch(e) {}
+              try { const items = JSON.parse(existing.items_json || '{}'); checked = Object.keys(items).filter(k => items[k]).length; } catch(e) {}
             }
-            return checked > 0 || total > 0 ? `${checked}/${total}` : null;
+            return checked > 0 ? `${checked}/${total}` : null;
+          }
+          if (key === 'spring_checklist') {
+            const existing = (card.checklists || []).find(c => c.checklist_type === 'spring');
+            let checked = 0, total = SPRING_CHECKLIST.reduce((acc, cat) => acc + cat.items.length, 0);
+            if (existing) {
+              try { const items = JSON.parse(existing.items_json || '{}'); checked = Object.keys(items).filter(k => items[k]).length; } catch(e) {}
+            }
+            return checked > 0 ? `${checked}/${total}` : null;
           }
           if (key === 'photos') {
             return (card.photos || []).length > 0 ? card.photos.length : null;
@@ -2374,15 +2180,34 @@
           return null;
         };
 
+        const isFallStage = ['fall_checklist','storage','service','cleaning','spring_checklist'].includes(card.status);
+        const isSpringStage = ['spring_checklist','ready'].includes(card.status);
+        const isServiceStage = card.status === 'service';
+        const isCleaningStage = card.status === 'cleaning';
+
         const tabs = [
           { key: "info", label: "Info" },
-          { key: "work", label: "Service" },
-          { key: "cleaning", label: "Cleaning" },
-          { key: "items", label: "Items" },
+          { key: "authorized", label: "Authorized" },
+          ...(isFallStage || isSpringStage ? [{ key: "fall_checklist", label: "Fall Checklist" }] : []),
+          ...(isServiceStage ? [{ key: "service_work", label: "Service Work" }] : []),
+          ...(isCleaningStage ? [{ key: "cleaning_work", label: "Cleaning Work" }] : []),
+          ...(isSpringStage ? [{ key: "spring_checklist", label: "Spring Checklist" }] : []),
           { key: "logs", label: "Log" },
-          { key: "checklist", label: "Checklist" },
           { key: "photos", label: "Photos" },
         ];
+
+        const statusClick = async (s) => {
+          if (s === card.status) return;
+          setSaving(true);
+          try {
+            await api("PUT", `/cards/${card.id}`, { status: s });
+            showToast(`Status → ${STATUS_CONFIG[s].label}`);
+            reload();
+          } catch (e) {
+            showToast("Failed to update");
+          }
+          setSaving(false);
+        };
 
         return (
           <div>
@@ -2415,7 +2240,7 @@
                 }}
               >
                 {card.customer_name} · {card.motor_type || "—"} ·{" "}
-                {card.licence || "—"}
+                {card.licence || "—"}{card.trailer_licence ? ` / T:${card.trailer_licence}` : ""}
               </div>
               {/* Status pipeline */}
               <div
@@ -2433,6 +2258,7 @@
                   return (
                     <div
                       key={s}
+                      onClick={() => statusClick(s)}
                       style={{
                         flexShrink: 0,
                         padding: "4px 10px",
@@ -2442,6 +2268,7 @@
                         fontWeight: 700,
                         letterSpacing: 0.8,
                         textTransform: "uppercase",
+                        cursor: "pointer",
                         background: current
                           ? "#fff"
                           : past
@@ -2465,20 +2292,29 @@
               </div>
             </div>
 
-            {/* Next status button */}
-            {nextStatus && (
-              <div style={{ padding: "10px 12px 0" }}>
+            {/* Forward/Back status buttons */}
+            <div style={{ display: "flex", gap: 8, padding: "10px 12px 0" }}>
+              {prevStatus && (
+                <button
+                  className="btn btn-outline"
+                  onClick={retreatStatus}
+                  disabled={saving}
+                  style={{ flex: 1, opacity: saving ? 0.7 : 1 }}
+                >
+                  <Icon name="arrow-left" size={16} /> {STATUS_CONFIG[prevStatus].label}
+                </button>
+              )}
+              {nextStatus && (
                 <button
                   className="btn btn-accent"
                   onClick={advanceStatus}
                   disabled={saving}
-                  style={{ opacity: saving ? 0.7 : 1 }}
+                  style={{ flex: 1, opacity: saving ? 0.7 : 1 }}
                 >
-                  <Icon name="check" size={16} color="#fff" />
-                  Move to {STATUS_CONFIG[nextStatus].label}
+                  <Icon name="arrow-right" size={16} /> {STATUS_CONFIG[nextStatus].label}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Tabs */}
             <div
@@ -2514,13 +2350,12 @@
 
             {/* Tab content */}
             {tab === "info" && <InfoTab card={card} reload={reload} />}
-            {tab === "work" && <WorkTab card={card} reload={reload} />}
-            {tab === "cleaning" && <CleaningTab card={card} reload={reload} />}
-            {tab === "items" && <ItemsTab card={card} reload={reload} />}
+            {tab === "authorized" && <AuthorizedTab card={card} reload={reload} />}
+            {tab === "fall_checklist" && <ChecklistTab card={card} reload={reload} checklistType="fall" />}
+            {tab === "service_work" && <ServiceWorkTab card={card} reload={reload} />}
+            {tab === "cleaning_work" && <CleaningWorkTab card={card} reload={reload} />}
+            {tab === "spring_checklist" && <ChecklistTab card={card} reload={reload} checklistType="spring" />}
             {tab === "logs" && <LogsTab card={card} reload={reload} />}
-            {tab === "checklist" && (
-              <ChecklistTab card={card} reload={reload} />
-            )}
             {tab === "photos" && <PhotosTab card={card} reload={reload} />}
           </div>
         );
@@ -2540,11 +2375,24 @@
           remarks: card.remarks || "",
           other_work: card.other_work || "",
           invoice_number: card.invoice_number || "",
+          storage_building: "",
+          storage_row: "",
+          storage_col: "",
+          storage_level: "",
         });
 
         const save = async () => {
           try {
-            await api("PUT", `/cards/${card.id}`, form);
+            let loc = form.storage_location;
+            if (form.storage_type === 'storage_building') {
+              const parts = [];
+              if (form.storage_building) parts.push(`Bldg ${form.storage_building}`);
+              if (form.storage_row) parts.push(`Row ${form.storage_row}`);
+              if (form.storage_col) parts.push(`Col ${form.storage_col}`);
+              if (form.storage_level) parts.push(`Lvl ${form.storage_level}`);
+              loc = parts.join(', ');
+            }
+            await api("PUT", `/cards/${card.id}`, { ...form, storage_location: loc });
             showToast("Saved");
             setEditing(false);
             reload();
@@ -2612,6 +2460,7 @@
                     ["Motor", card.motor_type],
                     ["Model", card.model],
                     ["Licence", card.licence],
+                    ["Trailer", card.trailer_licence],
                     ["Length", card.length_ft ? `${card.length_ft} ft` : null],
                     ["Rate", card.rate_type],
                     ["S/N", card.serial_no],
@@ -2778,39 +2627,49 @@
                     ))}
                   </div>
 
-                  <label
-                    style={{
-                      fontFamily: "Barlow Condensed",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: 0.8,
-                      color: "var(--text2)",
-                      textTransform: "uppercase",
-                      display: "block",
-                      marginBottom: 4,
-                    }}
-                  >
-                    Location
-                  </label>
-                  <input
-                    placeholder="e.g. Compound, Row B, Level 2"
-                    style={{
-                      width: "100%",
-                      background: "var(--surface2)",
-                      border: "1.5px solid var(--border)",
-                      borderRadius: "var(--r3)",
-                      padding: "9px 12px",
-                      fontFamily: "Barlow",
-                      fontSize: 14,
-                      color: "var(--text)",
-                      outline: "none",
-                      marginBottom: 12,
-                    }}
-                    value={form.storage_location}
-                    onChange={(e) =>
-                      setForm({ ...form, storage_location: e.target.value })
-                    }
-                  />
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontFamily: "Barlow Condensed", fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: "var(--text2)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
+                      Location Details
+                    </label>
+                    {form.storage_type === 'boathouse' && (
+                      <input placeholder="Boathouse name or #" style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }}
+                        value={form.storage_location || ""} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
+                    )}
+                    {form.storage_type === 'storage_building' && (
+                      <div>
+                        <div className="row-2" style={{ marginBottom: 8 }}>
+                          <input placeholder="Building #" style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }}
+                            value={form.storage_building || ""} onChange={(e) => setForm({ ...form, storage_building: e.target.value })} />
+                          <select style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }}
+                            value={form.storage_row || ""} onChange={(e) => setForm({ ...form, storage_row: e.target.value })}>
+                            <option value="">Row (A-Z)</option>
+                            {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(l => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                        </div>
+                        <div className="row-2">
+                          <select style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }}
+                            value={form.storage_col || ""} onChange={(e) => setForm({ ...form, storage_col: e.target.value })}>
+                            <option value="">Column</option>
+                            {Array.from({length:30},(_,i)=>i+1).map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                          <select style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }}
+                            value={form.storage_level || ""} onChange={(e) => setForm({ ...form, storage_level: e.target.value })}>
+                            <option value="">Level</option>
+                            {Array.from({length:5},(_,i)=>i+1).map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                    {!['boathouse','storage_building'].includes(form.storage_type) && form.storage_type && (
+                      <input placeholder="Notes (optional)" style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }}
+                        value={form.storage_location || ""} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
+                    )}
+                    {!form.storage_type && (
+                      <div style={{ fontFamily: "Barlow Condensed", fontSize: 12, fontWeight: 600, color: "var(--text3)", padding: "6px 0" }}>
+                        Select a storage type above to configure location
+                      </div>
+                    )}
+                  </div>
 
                   <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                     <button
@@ -3022,6 +2881,33 @@
               </div>
             )}
 
+            {/* Received items */}
+            <div className="section-head">Items Received at Intake</div>
+            <div className="card" style={{ margin: "0 12px 12px" }}>
+              <div className="chip-grid" style={{ padding: "4px 16px 16px" }}>
+                {RECEIVED_ITEMS.map((ri) => {
+                  const entry = (card.received_items || []).find((i) => i.item === ri.key) || {};
+                  return (
+                    <button
+                      key={ri.key}
+                      className={`chip ${entry.present ? "on green" : ""}`}
+                      onClick={async () => {
+                        const items = (card.received_items || []).map(i => i.item === ri.key ? {...i, present: i.present ? 0 : 1} : i);
+                        if (!items.find(i => i.item === ri.key)) items.push({ item: ri.key, present: 1, notes: "" });
+                        try {
+                          await api("PUT", `/cards/${card.id}/items`, { items: items.map(i => ({ item: i.item, present: !!i.present, notes: i.notes })) });
+                          reload();
+                        } catch(e) { showToast("Save failed"); }
+                      }}
+                    >
+                      {entry.present ? "✓ " : ""}
+                      {ri.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Condition assessment */}
             <div className="section-head">Condition Assessment</div>
             <div className="card" style={{ margin: "0 12px 20px" }}>
@@ -3156,7 +3042,7 @@
             return; // scrolling
           }
 
-          if (!completed && dx > 0) {
+          if (!completed && dx > 0 && authorized) {
             setOffset(Math.min(dx, 120));
           } else if (completed && dx < 0) {
             setOffset(Math.max(dx, -120));
@@ -3171,14 +3057,14 @@
         const handlePointerUp = (e) => {
           if (!startPos.current) return;
           clearTimer();
-          if (!completed && offset > 80) {
+          if (!completed && offset > 80 && authorized) {
             onComplete();
           }
 
           if (wasDragged.current) {
             // Just reset offset if they were dragging
             setOffset(0);
-          } else {
+          } else if (!completed) {
             // It was a click!
             onToggleAuth();
           }
@@ -3239,34 +3125,7 @@
                 transition: startPos.current ? "none" : "transform .2s ease",
               }}
             >
-              <div
-                style={{
-                  width: 44,
-                  height: 26,
-                  borderRadius: 13,
-                  flexShrink: 0,
-                  marginRight: 12,
-                  background: authorized ? "var(--accent)" : "var(--surface2)",
-                  border: `2px solid ${authorized ? "var(--accent)" : "var(--border)"}`,
-                  position: "relative",
-                  transition: "all .2s",
-                  cursor: "pointer",
-                }}
-              >
-                <div
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: "50%",
-                    background: "#fff",
-                    position: "absolute",
-                    top: 2,
-                    left: authorized ? 20 : 2,
-                    transition: "all .2s",
-                    boxShadow: "0 1px 3px rgba(0,0,0,.2)",
-                  }}
-                />
-              </div>
+
               <div style={{ flex: 1 }}>
                 <div
                   style={{
@@ -3277,7 +3136,7 @@
                       : authorized
                         ? "var(--text)"
                         : "var(--text3)",
-                    textDecoration: completed ? "line-through" : "none",
+
                   }}
                 >
                   {label}
@@ -3316,242 +3175,104 @@
         );
       }
 
-      // WORK AUTHORIZED TAB // NOW SERVICE
-      function WorkTab({ card, reload }) {
+      // AUTHORIZED TAB
+      function AuthorizedTab({ card, reload }) {
         const showToast = useContext(ToastCtx);
+        const { employee } = useContext(AuthCtx);
         const [work, setWork] = useState(card.authorized_work || []);
         const [customTask, setCustomTask] = useState("");
+        const isReadOnly = employee?.role === 'mechanic' || employee?.role === 'wrapper';
 
-        const toggle = async (key, field) => {
-          const existing = work.find((w) => w.service_type === key);
-          let updated;
-          if (existing) {
-            updated = work.map((w) =>
-              w.service_type === key ? { ...w, [field]: w[field] ? 0 : 1 } : w,
-            );
-          } else {
-            updated = [...work, { service_type: key, [field]: 1 }];
-          }
+        const toggleAuth = async (key) => {
+          if (isReadOnly) return;
+          const updated = work.map((w) =>
+            w.service_type === key ? { ...w, authorized: w.authorized ? 0 : 1 } : w,
+          );
+          if (!updated.find(w => w.service_type === key)) updated.push({ service_type: key, authorized: 1 });
           setWork(updated);
           try {
-            await api("PUT", `/cards/${card.id}/work`, {
-              work: updated.map((w) => ({
-                ...w,
-                authorized: !!w.authorized,
-                completed: !!w.completed,
-              })),
-            });
+            await api("PUT", `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) });
             reload();
-          } catch (e) {
-            showToast("Save failed");
-            reload();
-          }
+          } catch (e) { showToast("Save failed"); reload(); }
         };
 
         const addCustomTask = async (e) => {
           e.preventDefault();
-          if (!customTask.trim()) return;
+          if (!customTask.trim() || isReadOnly) return;
           const taskName = customTask.trim();
-          if (work.find((w) => w.service_type === taskName)) return; // prevent dupes
-          const updated = [
-            ...work,
-            { service_type: taskName, authorized: 1, completed: 0 },
-          ];
+          if (work.find((w) => w.service_type === taskName)) return;
+          const updated = [...work, { service_type: taskName, authorized: 1, completed: 0 }];
           setWork(updated);
           setCustomTask("");
           try {
-            await api("PUT", `/cards/${card.id}/work`, {
-              work: updated.map((w) => ({
-                ...w,
-                authorized: !!w.authorized,
-                completed: !!w.completed,
-              })),
-            });
+            await api("PUT", `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) });
             reload();
-          } catch (e) {
-            showToast("Save failed");
-            reload();
-          }
+          } catch (e) { showToast("Save failed"); reload(); }
         };
 
-        const standardKeys = new Set([
-          ...AUTHORIZED_WORK.map((w) => w.key),
-          ...CLEANING_ITEMS.flatMap((g) => g.items.map((i) => i.key)),
-        ]);
-        const customItems = work.filter(
-          (w) => !standardKeys.has(w.service_type),
-        );
-
-        const allDisplayItems = [
-          ...AUTHORIZED_WORK,
-          ...customItems.map((w) => ({
-            key: w.service_type,
-            label: w.service_type,
-          })),
-        ];
+        const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)));
+        const serviceItems = work.filter(w => !cleanKeys.has(w.service_type));
+        const cleaningItems = work.filter(w => cleanKeys.has(w.service_type));
+        const customItems = work.filter(w => !new Set([...AUTHORIZED_WORK.map(w => w.key), ...cleanKeys]).has(w.service_type));
 
         return (
           <div>
-            <form
-              onSubmit={addCustomTask}
-              style={{ padding: "12px 16px 4px", display: "flex", gap: 8 }}
-            >
-              <input
-                type="text"
-                value={customTask}
-                onChange={(e) => setCustomTask(e.target.value)}
-                placeholder="New custom service task..."
-                style={{
-                  flex: 1,
-                  background: "var(--surface2)",
-                  border: "1.5px solid var(--border)",
-                  borderRadius: 6,
-                  padding: "10px 12px",
-                  fontSize: 15,
-                  color: "var(--text)",
-                  outline: "none",
-                }}
-              />
-              <button
-                type="submit"
-                disabled={!customTask.trim()}
-                style={{
-                  background: "var(--accent)",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "0 16px",
-                  fontFamily: "Barlow Condensed",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-              >
-                Add
-              </button>
-            </form>
+            {isReadOnly && (
+              <div style={{ padding: "8px 16px", background: "var(--surface2)", fontSize: 12, fontFamily: "Barlow Condensed", fontWeight: 700, letterSpacing: 0.5, color: "var(--text3)", textTransform: "uppercase", borderBottom: "1px solid var(--border)" }}>
+                🔒 Read-only — view authorized tasks below
+              </div>
+            )}
+            {!isReadOnly && (
+              <form onSubmit={addCustomTask} style={{ padding: "12px 16px 4px", display: "flex", gap: 8 }}>
+                <input type="text" value={customTask} onChange={(e) => setCustomTask(e.target.value)} placeholder="New custom task..." style={{ flex: 1, background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 6, padding: "10px 12px", fontSize: 15, color: "var(--text)", outline: "none" }} />
+                <button type="submit" disabled={!customTask.trim()} style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, padding: "0 16px", fontFamily: "Barlow Condensed", fontWeight: 700, textTransform: "uppercase", cursor: "pointer" }}>Add</button>
+              </form>
+            )}
 
-            <div
-              style={{
-                padding: "8px 16px 8px",
-                fontFamily: "Barlow Condensed",
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                color: "var(--text3)",
-                textTransform: "uppercase",
-              }}
-            >
-              Tap to authorize · Slide to complete
+            {/* Service section */}
+            <div style={{ padding: "12px 16px 6px", fontFamily: "Barlow Condensed", fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: "var(--text2)", textTransform: "uppercase", borderBottom: "1px solid var(--border)" }}>
+              Service
             </div>
-            <div className="card" style={{ margin: "0 12px" }}>
-              {allDisplayItems.map((w, i) => {
-                const entry = work.find((x) => x.service_type === w.key) || {};
-                const authorized = !!entry.authorized;
-                const completed = !!entry.completed;
+            <div className="card" style={{ margin: "6px 12px 12px" }}>
+              {AUTHORIZED_WORK.map((w, i) => {
+                const entry = serviceItems.find(x => x.service_type === w.key) || {};
                 return (
-                  <SwipeableTask
-                    key={w.key}
-                    label={w.label}
-                    authorized={authorized}
-                    completed={completed}
-                    isLast={i === allDisplayItems.length - 1}
-                    onToggleAuth={() => toggle(w.key, "authorized")}
-                    onComplete={() => toggle(w.key, "completed")}
-                    onUncomplete={() => toggle(w.key, "completed")}
-                  />
+                  <div key={w.key} style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: i < AUTHORIZED_WORK.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? "var(--accent)" : "var(--surface2)", border: `2px solid ${entry.authorized ? "var(--accent)" : "var(--border)"}`, position: "relative", cursor: isReadOnly ? "default" : "pointer", transition: "all .2s", opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.key)}>
+                      <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: entry.authorized ? 20 : 2, transition: "all .2s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+                    </div>
+                    <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: entry.authorized ? "var(--text)" : "var(--text3)" }}>{w.label}</div>
+                  </div>
                 );
               })}
+              {customItems.filter(w => !cleanKeys.has(w.service_type)).map((w, i) => (
+                <div key={w.service_type} style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: i < customItems.length - 1 ? "1px solid var(--border)" : "none" }}>
+                  <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: w.authorized ? "var(--accent)" : "var(--surface2)", border: `2px solid ${w.authorized ? "var(--accent)" : "var(--border)"}`, position: "relative", cursor: isReadOnly ? "default" : "pointer", opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.service_type)}>
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: w.authorized ? 20 : 2, transition: "all .2s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+                  </div>
+                  <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: w.authorized ? "var(--text)" : "var(--text3)" }}>{w.service_type}</div>
+                </div>
+              ))}
+              {AUTHORIZED_WORK.length === 0 && customItems.length === 0 && <div style={{ padding: 16, textAlign: "center", color: "var(--text3)", fontSize: 13 }}>No service tasks</div>}
             </div>
-            <div
-              style={{
-                padding: "10px 16px",
-                fontFamily: "Barlow Condensed",
-                fontSize: 11,
-                fontWeight: 600,
-                color: "var(--text3)",
-                letterSpacing: 0.3,
-              }}
-            >
-              Tap to authorize · Slide to mark complete
-            </div>
-          </div>
-        );
-      }
 
-      // CLEANING TAB
-      function CleaningTab({ card, reload }) {
-        const showToast = useContext(ToastCtx);
-        const [work, setWork] = useState(card.authorized_work || []);
-
-        const toggle = async (key, field) => {
-          const updated = work.map((w) =>
-            w.service_type === key ? { ...w, [field]: w[field] ? 0 : 1 } : w,
-          );
-          setWork(updated);
-          try {
-            await api("PUT", `/cards/${card.id}/work`, {
-              work: updated.map((w) => ({
-                ...w,
-                authorized: !!w.authorized,
-                completed: !!w.completed,
-              })),
-            });
-            reload();
-          } catch (e) {
-            showToast("Save failed");
-            reload();
-          }
-        };
-
-        return (
-          <div>
-            <div
-              style={{
-                padding: "12px 16px 8px",
-                fontFamily: "Barlow Condensed",
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                color: "var(--text3)",
-                textTransform: "uppercase",
-              }}
-            >
-              Tap to authorize · Slide to complete
+            {/* Cleaning section */}
+            <div style={{ padding: "12px 16px 6px", fontFamily: "Barlow Condensed", fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: "var(--text2)", textTransform: "uppercase", borderBottom: "1px solid var(--border)" }}>
+              Cleaning
             </div>
             {CLEANING_ITEMS.map((group) => (
-              <div key={group.cat} style={{ margin: "0 12px 12px" }}>
-                <div
-                  style={{
-                    fontFamily: "Barlow Condensed",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                    color: "var(--text2)",
-                    textTransform: "uppercase",
-                    padding: "14px 4px 6px",
-                    borderBottom: "1px solid var(--border)",
-                  }}
-                >
-                  {group.cat}
-                </div>
-                <div className="card" style={{ marginTop: 6 }}>
+              <div key={group.cat} style={{ margin: "0 12px 6px" }}>
+                <div style={{ fontFamily: "Barlow Condensed", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text3)", textTransform: "uppercase", padding: "8px 4px 4px" }}>{group.cat}</div>
+                <div className="card">
                   {group.items.map((w, i) => {
-                    const entry =
-                      work.find((x) => x.service_type === w.key) || {};
-                    const authorized = !!entry.authorized;
-                    const completed = !!entry.completed;
+                    const entry = cleaningItems.find(x => x.service_type === w.key) || {};
                     return (
-                      <SwipeableTask
-                        key={w.key}
-                        label={w.label}
-                        authorized={authorized}
-                        completed={completed}
-                        isLast={i === group.items.length - 1}
-                        onToggleAuth={() => toggle(w.key, "authorized")}
-                        onComplete={() => toggle(w.key, "completed")}
-                        onUncomplete={() => toggle(w.key, "completed")}
-                      />
+                      <div key={w.key} style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: i < group.items.length - 1 ? "1px solid var(--border)" : "none" }}>
+                        <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? "var(--accent)" : "var(--surface2)", border: `2px solid ${entry.authorized ? "var(--accent)" : "var(--border)"}`, position: "relative", cursor: isReadOnly ? "default" : "pointer", opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.key)}>
+                          <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: entry.authorized ? 20 : 2, transition: "all .2s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+                        </div>
+                        <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: entry.authorized ? "var(--text)" : "var(--text3)" }}>{w.label}</div>
+                      </div>
                     );
                   })}
                 </div>
@@ -3561,56 +3282,112 @@
         );
       }
 
-      // RECEIVED ITEMS TAB
-      function ItemsTab({ card, reload }) {
+      // SERVICE WORK TAB
+      function ServiceWorkTab({ card, reload }) {
         const showToast = useContext(ToastCtx);
-        const [items, setItems] = useState(card.received_items || []);
+        const [work, setWork] = useState(card.authorized_work || []);
 
-        const toggle = async (key) => {
-          let updated = [...items];
-          const idx = updated.findIndex((it) => it.item === key);
-          if (idx >= 0) {
-            updated[idx] = {
-              ...updated[idx],
-              present: updated[idx].present ? 0 : 1,
-            };
-          } else {
-            updated.push({ item: key, present: 1, notes: "" });
-          }
-          setItems(updated);
+        const toggle = async (key, field) => {
+          const updated = work.map((w) =>
+            w.service_type === key ? { ...w, [field]: w[field] ? 0 : 1 } : w,
+          );
+          setWork(updated);
           try {
-            await api("PUT", `/cards/${card.id}/items`, {
-              items: updated.map((i) => ({
-                item: i.item,
-                present: !!i.present,
-                notes: i.notes,
-              })),
-            });
+            await api("PUT", `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) });
             reload();
-          } catch (e) {
-            showToast("Save failed");
-            reload();
-          }
+          } catch (e) { showToast("Save failed"); reload(); }
         };
+
+        const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)));
+        const authServiceItems = work.filter(w => w.authorized && !cleanKeys.has(w.service_type));
+        const customItems = work.filter(w => w.authorized && !new Set([...AUTHORIZED_WORK.map(w => w.key), ...cleanKeys]).has(w.service_type));
+
+        if (authServiceItems.length === 0 && customItems.length === 0) {
+          return <div style={{ padding: 20, textAlign: "center", color: "var(--text3)", fontFamily: "Barlow Condensed", fontWeight: 700, fontSize: 14 }}>No authorized service tasks. Go to the Authorized tab first.</div>;
+        }
 
         return (
           <div>
-            <div className="section-head">Items with Boat</div>
-            <div className="chip-grid" style={{ padding: "4px 16px 16px" }}>
-              {RECEIVED_ITEMS.map((ri) => {
-                const entry = items.find((i) => i.item === ri.key) || {};
+            <div style={{ padding: "8px 16px 8px", fontFamily: "Barlow Condensed", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text3)", textTransform: "uppercase" }}>
+              Slide to complete authorized service tasks
+            </div>
+            <div className="card" style={{ margin: "0 12px" }}>
+              {[...AUTHORIZED_WORK.filter(w => authServiceItems.find(a => a.service_type === w.key)), ...customItems.map(w => ({ key: w.service_type, label: w.service_type }))].map((w, i, arr) => {
+                const entry = work.find(x => x.service_type === w.key) || {};
                 return (
-                  <button
-                    key={ri.key}
-                    className={`chip ${entry.present ? "on green" : ""}`}
-                    onClick={() => toggle(ri.key)}
-                  >
-                    {entry.present ? "✓ " : ""}
-                    {ri.label}
-                  </button>
+                  <SwipeableTask
+                    key={w.key}
+                    label={w.label}
+                    authorized={true}
+                    completed={!!entry.completed}
+                    isLast={i === arr.length - 1}
+                    onToggleAuth={() => {}}
+                    onComplete={() => toggle(w.key, "completed")}
+                    onUncomplete={() => toggle(w.key, "completed")}
+                  />
                 );
               })}
             </div>
+          </div>
+        );
+      }
+
+      // CLEANING WORK TAB
+      function CleaningWorkTab({ card, reload }) {
+        const showToast = useContext(ToastCtx);
+        const [work, setWork] = useState(card.authorized_work || []);
+
+        const toggle = async (key, field) => {
+          const updated = work.map((w) =>
+            w.service_type === key ? { ...w, [field]: w[field] ? 0 : 1 } : w,
+          );
+          setWork(updated);
+          try {
+            await api("PUT", `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) });
+            reload();
+          } catch (e) { showToast("Save failed"); reload(); }
+        };
+
+        const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)));
+        const allAuthCleaning = work.filter(w => w.authorized && cleanKeys.has(w.service_type));
+
+        if (allAuthCleaning.length === 0) {
+          return <div style={{ padding: 20, textAlign: "center", color: "var(--text3)", fontFamily: "Barlow Condensed", fontWeight: 700, fontSize: 14 }}>No authorized cleaning tasks. Go to the Authorized tab first.</div>;
+        }
+
+        return (
+          <div>
+            <div style={{ padding: "8px 16px 8px", fontFamily: "Barlow Condensed", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text3)", textTransform: "uppercase" }}>
+              Slide to complete authorized cleaning tasks
+            </div>
+            {CLEANING_ITEMS.map((group) => {
+              const groupItems = group.items.filter(w => allAuthCleaning.find(a => a.service_type === w.key));
+              if (groupItems.length === 0) return null;
+              return (
+                <div key={group.cat} style={{ margin: "0 12px 12px" }}>
+                  <div style={{ fontFamily: "Barlow Condensed", fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: "var(--text2)", textTransform: "uppercase", padding: "14px 4px 6px", borderBottom: "1px solid var(--border)" }}>
+                    {group.cat}
+                  </div>
+                  <div className="card" style={{ marginTop: 6 }}>
+                    {groupItems.map((w, i) => {
+                      const entry = work.find(x => x.service_type === w.key) || {};
+                      return (
+                        <SwipeableTask
+                          key={w.key}
+                          label={w.label}
+                          authorized={true}
+                          completed={!!entry.completed}
+                          isLast={i === groupItems.length - 1}
+                          onToggleAuth={() => {}}
+                          onComplete={() => toggle(w.key, "completed")}
+                          onUncomplete={() => toggle(w.key, "completed")}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       }
@@ -3741,13 +3518,9 @@
       }
 
       // CHECKLIST TAB
-      function ChecklistTab({ card, reload }) {
+      function ChecklistTab({ card, reload, checklistType }) {
         const showToast = useContext(ToastCtx);
-        const season =
-          card.status === "spring_checklist" || card.status === "ready"
-            ? "spring"
-            : "fall";
-        const [activeList, setActiveList] = useState(season);
+        const [activeList, setActiveList] = useState(checklistType || 'fall');
         const CHECKLISTS = { fall: FALL_CHECKLIST, spring: SPRING_CHECKLIST };
 
         const [localChecklists, setLocalChecklists] = useState(
@@ -3890,7 +3663,7 @@
           }
         };
 
-        const PHOTO_TYPES = ["before", "after", "damage", "general"];
+        const PHOTO_TYPES = ["intake", "damage", "replacement", "cleaning_complete", "general"];
 
         return (
           <div>
@@ -3926,7 +3699,7 @@
                 />
                 {uploading
                   ? "Uploading..."
-                  : `Add ${photoType.charAt(0).toUpperCase() + photoType.slice(1)} Photo`}
+                  : `Add ${photoType.replace('_',' ').replace(/\b\w/g, l => l.toUpperCase())} Photo`}
               </button>
               <input
                 ref={fileRef}
@@ -3942,7 +3715,7 @@
               <div className="empty-state">
                 <div className="empty-icon">📷</div>
                 <div className="empty-title">No Photos Yet</div>
-                <div className="empty-msg">Capture before & after photos</div>
+                <div className="empty-msg">Capture intake, damage, or completion photos</div>
               </div>
             ) : (
               <div className="photo-grid">
@@ -4395,6 +4168,7 @@
           motor_type: "",
           model: "",
           licence: "",
+          trailer_licence: "",
           length_ft: "",
         });
         const [customers, setCustomers] = useState([]);
@@ -4461,13 +4235,23 @@
                 />
               </div>
 
-              <div className="form-group">
-                <label>Licence / Reg</label>
-                <input
-                  type="text"
-                  value={boat.licence}
-                  onChange={(e) => setBoat({ ...boat, licence: e.target.value })}
-                />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="form-group">
+                  <label>Licence / Reg</label>
+                  <input
+                    type="text"
+                    value={boat.licence}
+                    onChange={(e) => setBoat({ ...boat, licence: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Trailer Licence</label>
+                  <input
+                    type="text"
+                    value={boat.trailer_licence}
+                    onChange={(e) => setBoat({ ...boat, trailer_licence: e.target.value })}
+                  />
+                </div>
               </div>
 
               <div className="form-group">
@@ -4509,6 +4293,7 @@
           motor_type: "",
           model: "",
           licence: "",
+          trailer_licence: "",
           length_ft: "",
         });
         const [cardForm, setCardForm] = useState({
@@ -4826,7 +4611,6 @@
                       ["Boat Name", "name"],
                       ["Motor Type", "motor_type"],
                       ["Model", "model"],
-                      ["Licence", "licence"],
                       ["Length (ft)", "length_ft"],
                     ].map(([label, key]) => (
                       <div key={key} style={{ marginBottom: 12 }}>
@@ -4863,6 +4647,16 @@
                         />
                       </div>
                     ))}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                      <div>
+                        <label style={{ fontFamily: "Barlow Condensed", fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: "var(--text2)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Licence / Reg</label>
+                        <input style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }} value={newBoat.licence} onChange={(e) => setNewBoat({ ...newBoat, licence: e.target.value })} />
+                      </div>
+                      <div>
+                        <label style={{ fontFamily: "Barlow Condensed", fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: "var(--text2)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Trailer Licence</label>
+                        <input style={{ width: "100%", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: "var(--r3)", padding: "9px 12px", fontFamily: "Barlow", fontSize: 14, color: "var(--text)", outline: "none" }} value={newBoat.trailer_licence} onChange={(e) => setNewBoat({ ...newBoat, trailer_licence: e.target.value })} />
+                      </div>
+                    </div>
                     <button
                       className="btn btn-primary"
                       onClick={createBoat}
@@ -5067,7 +4861,6 @@
         const [customers, setCustomers] = useState([]);
         const [search, setSearch] = useState("");
         const [loading, setLoading] = useState(true);
-        const [editingCustomer, setEditingCustomer] = useState(null);
         const showToast = useContext(ToastCtx);
 
         const fetchCustomers = () => {
@@ -5085,68 +4878,18 @@
           fetchCustomers();
         }, [search]);
 
-        const saveCustomer = async () => {
-          if (!editingCustomer.name) {
-            return showToast("Name is required");
-          }
+        const editCustomer = async (c, e) => {
+          e.stopPropagation();
+          const name = prompt("Name", c.name);
+          if (!name) return;
+          const phone = prompt("Phone", c.phone || "");
+          const email = prompt("Email", c.email || "");
           try {
-            await api("PUT", `/customers/${editingCustomer.id}`, editingCustomer);
+            await api("PUT", `/customers/${c.id}`, { name, phone, email });
             showToast("Customer updated");
-            setEditingCustomer(null);
             fetchCustomers();
-          } catch (e) {
-            showToast("Failed to update customer");
-          }
+          } catch (e) { showToast("Failed"); }
         };
-
-        if (editingCustomer) {
-          return (
-            <div style={{ padding: "0 12px 24px" }}>
-              <div className="section-head" style={{ marginTop: 12 }}>Edit Customer</div>
-              <div className="card" style={{ padding: "14px 16px" }}>
-                <div className="field" style={{ marginBottom: 12 }}>
-                  <label>Name</label>
-                  <input
-                    value={editingCustomer.name || ""}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})}
-                  />
-                </div>
-                <div className="field" style={{ marginBottom: 12 }}>
-                  <label>Phone</label>
-                  <input
-                    value={editingCustomer.phone || ""}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})}
-                  />
-                </div>
-                <div className="field" style={{ marginBottom: 12 }}>
-                  <label>Email</label>
-                  <input
-                    value={editingCustomer.email || ""}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})}
-                  />
-                </div>
-                <div className="field" style={{ marginBottom: 12 }}>
-                  <label>City</label>
-                  <input
-                    value={editingCustomer.city || ""}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, city: e.target.value})}
-                  />
-                </div>
-                <div className="field" style={{ marginBottom: 12 }}>
-                  <label>Address</label>
-                  <input
-                    value={editingCustomer.address || ""}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                  <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setEditingCustomer(null)}>Cancel</button>
-                  <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveCustomer}>Save</button>
-                </div>
-              </div>
-            </div>
-          );
-        }
 
         return (
           <div>
@@ -5182,15 +4925,13 @@
                 customers.map((c, i) => (
                   <div
                     key={c.id}
-                    onClick={() => {
-                        if (employee?.role === "admin" || employee?.role === "office") setEditingCustomer(c);
-                    }}
+                    onClick={() => navigate("customer-detail", { customerId: c.id, customerName: c.name })}
                     style={{
                       padding: "13px 16px",
                       borderBottom: i < customers.length - 1 ? "1px solid var(--border)" : "none",
                       display: "flex",
                       alignItems: "center",
-                      cursor: (employee?.role === "admin" || employee?.role === "office") ? "pointer" : "default"
+                      cursor: "pointer"
                     }}
                   >
                     <div style={{ flex: 1 }}>
@@ -5201,6 +4942,11 @@
                         {c.phone || c.email || 'No contact info'}
                       </div>
                     </div>
+                    {(employee?.role === "admin" || employee?.role === "office") && (
+                      <button onClick={(e) => editCustomer(c, e)} style={{ background: "none", border: "none", color: "var(--text3)", cursor: "pointer", padding: 6 }}>
+                        <Icon name="edit" size={16} />
+                      </button>
+                    )}
                   </div>
                 ))
               )}
@@ -5213,11 +4959,13 @@
       function BoatsScreen() {
         const { navigate } = useContext(NavCtx);
         const { employee } = useContext(AuthCtx);
+        const showToast = useContext(ToastCtx);
         const [boats, setBoats] = useState([]);
         const [search, setSearch] = useState("");
         const [loading, setLoading] = useState(true);
+        const [editingBoat, setEditingBoat] = useState(null);
 
-        useEffect(() => {
+        const fetchBoats = () => {
           setLoading(true);
           const qs = search ? `?q=${encodeURIComponent(search)}` : "";
           api("GET", `/boats${qs}`)
@@ -5226,7 +4974,78 @@
               setLoading(false);
             })
             .catch(() => setLoading(false));
+        };
+
+        useEffect(() => {
+          fetchBoats();
         }, [search]);
+
+        const saveBoat = async () => {
+          if (!editingBoat.name && !editingBoat.model) {
+            return showToast("Name or model required");
+          }
+          try {
+            await api("PUT", `/boats/${editingBoat.id}`, editingBoat);
+            showToast("Boat updated");
+            setEditingBoat(null);
+            fetchBoats();
+          } catch (e) {
+            showToast("Failed to update boat");
+          }
+        };
+
+        if (editingBoat) {
+          return (
+            <div style={{ padding: "0 12px 24px" }}>
+              <div className="section-head" style={{ marginTop: 12 }}>Edit Boat</div>
+              <div className="card" style={{ padding: "14px 16px" }}>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>Boat Name</label>
+                  <input value={editingBoat.name || ""} onChange={(e) => setEditingBoat({...editingBoat, name: e.target.value})} />
+                </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>Model</label>
+                  <input value={editingBoat.model || ""} onChange={(e) => setEditingBoat({...editingBoat, model: e.target.value})} />
+                </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>Motor</label>
+                  <input value={editingBoat.motor_type || ""} onChange={(e) => setEditingBoat({...editingBoat, motor_type: e.target.value})} />
+                </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>Serial No</label>
+                  <input value={editingBoat.serial_no || ""} onChange={(e) => setEditingBoat({...editingBoat, serial_no: e.target.value})} />
+                </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>Rate Type</label>
+                  <select value={editingBoat.rate_type || "SW"} onChange={(e) => setEditingBoat({...editingBoat, rate_type: e.target.value})}>
+                    <option value="SW">SW</option>
+                    <option value="DW">DW</option>
+                  </select>
+                </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>Length (ft)</label>
+                  <input type="number" value={editingBoat.length_ft || ""} onChange={(e) => setEditingBoat({...editingBoat, length_ft: e.target.value})} />
+                </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div>
+                      <label>Licence / Reg</label>
+                      <input value={editingBoat.licence || ""} onChange={(e) => setEditingBoat({...editingBoat, licence: e.target.value})} />
+                    </div>
+                    <div>
+                      <label>Trailer Licence</label>
+                      <input value={editingBoat.trailer_licence || ""} onChange={(e) => setEditingBoat({...editingBoat, trailer_licence: e.target.value})} />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                  <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setEditingBoat(null)}>Cancel</button>
+                  <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveBoat}>Save</button>
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         return (
           <div>
@@ -5262,11 +5081,15 @@
                 boats.map((b, i) => (
                   <div
                     key={b.id}
+                    onClick={() => {
+                      if (employee?.role === "admin" || employee?.role === "office") setEditingBoat(b);
+                    }}
                     style={{
                       padding: "13px 16px",
                       borderBottom: i < boats.length - 1 ? "1px solid var(--border)" : "none",
                       display: "flex",
-                      alignItems: "center"
+                      alignItems: "center",
+                      cursor: (employee?.role === "admin" || employee?.role === "office") ? "pointer" : "default"
                     }}
                   >
                     <div style={{ flex: 1 }}>
@@ -5274,7 +5097,7 @@
                         {b.name || "(no name)"}
                       </div>
                       <div style={{ fontSize: 13, color: "var(--text3)" }}>
-                        {b.customer_name} · {b.model} · {b.licence}
+                        {b.customer_name} · {b.model} · {b.licence}{b.trailer_licence ? ` · T:${b.trailer_licence}` : ""}
                       </div>
                     </div>
                   </div>
@@ -5874,23 +5697,136 @@
         );
       }
 
+      // ─── CUSTOMER DETAIL SCREEN ──────────────────────────────────────────────────────
+      function CustomerDetailScreen({ params = {} }) {
+        const { navigate, goBack } = useContext(NavCtx);
+        const showToast = useContext(ToastCtx);
+        const { employee } = useContext(AuthCtx);
+        const [customer, setCustomer] = useState(null);
+        const [cards, setCards] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [selectedBoat, setSelectedBoat] = useState(null);
+
+        useEffect(() => {
+          setLoading(true);
+          Promise.all([
+            api("GET", `/customers/${params.customerId}`),
+            api("GET", `/cards?q=${encodeURIComponent(params.customerName)}`),
+          ]).then(([cust, cardsData]) => {
+            setCustomer(cust);
+            setCards(cardsData.filter(c => c.customer_name === params.customerName));
+            setLoading(false);
+          }).catch(() => setLoading(false));
+        }, [params.customerId, params.customerName]);
+
+        const filteredCards = selectedBoat
+          ? cards.filter(c => c.boat_name === selectedBoat)
+          : cards;
+
+        if (loading) return <div style={{ padding: 20 }}><div className="shimmer" style={{ height: 200, borderRadius: "var(--r)" }} /></div>;
+        if (!customer) return <div style={{ padding: 20, textAlign: "center", color: "var(--text3)" }}>Customer not found</div>;
+
+        return (
+          <div>
+            <div style={{ background: "var(--primary)", padding: "12px 16px" }}>
+              <div style={{ fontFamily: "Bebas Neue", fontSize: 24, letterSpacing: 1.5, color: "#fff" }}>{customer.name}</div>
+              <div style={{ color: "rgba(255,255,255,.7)", fontSize: 13, marginTop: 4 }}>
+                {customer.phone} {customer.email ? `· ${customer.email}` : ''}
+              </div>
+            </div>
+
+            {/* Boats */}
+            <div className="section-head">Boats</div>
+            {(!customer.boats || customer.boats.length === 0) ? (
+              <div style={{ margin: "0 12px", padding: 16, textAlign: "center", color: "var(--text3)", fontFamily: "Barlow Condensed", fontWeight: 600 }}>No boats for this customer</div>
+            ) : (
+              <div className="card" style={{ margin: "0 12px 12px" }}>
+                {customer.boats.map((b, i) => (
+                  <div key={b.id} onClick={() => setSelectedBoat(selectedBoat === b.name ? null : b.name)} style={{
+                    padding: "13px 16px",
+                    borderBottom: i < customer.boats.length - 1 ? "1px solid var(--border)" : "none",
+                    display: "flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    background: selectedBoat === b.name ? "var(--surface2)" : "transparent",
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "Bebas Neue", fontSize: 18, letterSpacing: 1, color: "var(--text)" }}>
+                        {b.name || "(no name)"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--text3)" }}>
+                        {b.model || ''} {b.licence ? `· ${b.licence}` : ''} {b.trailer_licence ? `· T:${b.trailer_licence}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--text3)", flexShrink: 0 }}>{b.motor_type || ''}</div>
+                  </div>
+                ))}
+                {selectedBoat && (
+                  <div style={{ padding: "8px 16px", background: "var(--bg)", fontSize: 12, fontFamily: "Barlow Condensed", fontWeight: 700, color: "var(--text3)", letterSpacing: 0.5, textTransform: "uppercase", textAlign: "center" }}>
+                    Showing cards for {selectedBoat} — tap again to show all
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Service Cards */}
+            <div className="section-head">Service Cards {selectedBoat ? `— ${selectedBoat}` : ''}</div>
+            {filteredCards.length === 0 ? (
+              <div style={{ margin: "0 12px 12px", padding: 16, textAlign: "center", color: "var(--text3)", fontFamily: "Barlow Condensed", fontWeight: 600 }}>No service cards yet</div>
+            ) : (
+              <div className="card" style={{ margin: "0 12px 12px" }}>
+                {filteredCards.map((c, i) => {
+                  const cfg = STATUS_CONFIG[c.status] || STATUS_CONFIG.intake;
+                  return (
+                    <div key={c.id} onClick={() => navigate("card", { id: c.id })} style={{
+                      padding: "12px 16px",
+                      borderBottom: i < filteredCards.length - 1 ? "1px solid var(--border)" : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      cursor: "pointer",
+                    }}>
+                      <div style={{ width: 4, height: 32, borderRadius: 2, background: cfg.color, flexShrink: 0, marginRight: 12 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: "Bebas Neue", fontSize: 16, letterSpacing: 1, color: "var(--text)" }}>
+                          {c.boat_name} · {c.season_year}
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2, fontFamily: "Barlow Condensed", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                          {c.work_order_no} · {cfg.label}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* New card button */}
+            {(employee?.role === "admin" || employee?.role === "office") && (
+              <div style={{ padding: "0 12px 24px" }}>
+                <button className="btn btn-accent" onClick={() => navigate("new-card", { customerId: customer.id })} style={{ width: "100%" }}>
+                  <Icon name="plus" size={16} color="#fff" /> New Service Card
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       // ─── APP SHELL ────────────────────────────────────────────────────────────────
       const NAV_ITEMS = [
-        { key: "dashboard", label: "Home", icon: "home" },
-        { key: "cards", label: "Cards", icon: "list" },
+        { key: "cards", label: "Cards", icon: "id-card" },
         { key: "customers", label: "People", icon: "user" },
-        { key: "boats", label: "Boats", icon: "anchor" },
+        { key: "boats", label: "Boats", icon: "sailboat" },
         { key: "map", label: "Map", icon: "map" },
-        { key: "settings", label: "Setup", icon: "settings" },
+        { key: "settings", label: "Setup", icon: "ship-wheel" },
       ];
 
       function AppShell() {
         const { employee, logout } = useContext(AuthCtx);
         const [screenStack, setScreenStack] = useState([
-          { screen: "dashboard", params: {} },
+          { screen: "cards", params: {} },
         ]);
         const current = screenStack[screenStack.length - 1];
-        const canGoBack = screenStack.length > 1;
 
         const navigate = useCallback((screen, params = {}) => {
           setScreenStack((prev) => [...prev, { screen, params }]);
@@ -5902,29 +5838,7 @@
           );
         }, []);
 
-        const SCREEN_TITLES = {
-          dashboard: { title: "Marina Manager", sub: null },
-          cards: { title: "Service Cards", sub: null },
-          customers: { title: "Customers", sub: null },
-          boats: { title: "Boats", sub: null },
-          card: { title: "Service Card", sub: null },
-          "new-card": { title: (p) => p.target === 'customer' ? 'New Customer' : p.target === 'boat' ? 'New Boat' : 'New Card', sub: null },
-          "new-log": { title: "Add Work Entry", sub: (p) => p.cardName },
-          map: { title: "Storage Map", sub: null },
-          settings: { title: "Settings", sub: null },
-          admin: { title: "Manage Employees", sub: null },
-        };
-
-        const headerCfg = SCREEN_TITLES[current.screen] || {
-          title: current.screen,
-          sub: null,
-        };
-        const subTitle =
-          typeof headerCfg.sub === "function"
-            ? headerCfg.sub(current.params)
-            : headerCfg.sub;
-
-        const activeNav = ["map", "settings", "dashboard", "cards", "customers", "boats"].includes(
+        const activeNav = ["map", "settings", "cards", "customers", "boats"].includes(
           current.screen,
         )
           ? current.screen
@@ -5932,8 +5846,6 @@
 
         const renderScreen = () => {
           switch (current.screen) {
-            case "dashboard":
-              return <DashboardScreen />;
             case "cards":
               return <CardsScreen params={current.params} />;
             case "customers":
@@ -5952,47 +5864,16 @@
               return <SettingsScreen />;
             case "admin":
               return <AdminScreen />;
+            case "customer-detail":
+              return <CustomerDetailScreen params={current.params} />;
             default:
-              return <DashboardScreen />;
+              return <CardsScreen />;
           }
         };
 
         return (
           <NavCtx.Provider value={{ navigate, goBack }}>
             <div className="app-shell">
-              <div className="header">
-                {canGoBack ? (
-                  <button className="header-btn" onClick={goBack}>
-                    <Icon name="back" size={20} color="#fff" />
-                  </button>
-                ) : (
-                  <div
-                    onClick={() => setScreenStack([{ screen: "dashboard", params: {} }])}
-                    style={{
-                      marginLeft: 4,
-                      color: "rgba(255,255,255,.8)",
-                      fontSize: 20,
-                      cursor: "pointer",
-                    }}
-                  >
-                    ⚓
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="header-title">{headerCfg.title}</div>
-                  {subTitle && <div className="header-sub">{subTitle}</div>}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "Bebas Neue",
-                    fontSize: 14,
-                    letterSpacing: 1,
-                    color: "rgba(255,255,255,.6)",
-                  }}
-                >
-                  {employee?.initials}
-                </div>
-              </div>
 
               <div className="screen-body">{renderScreen()}</div>
 
@@ -6006,8 +5887,7 @@
                         setScreenStack([{ screen: item.key, params: {} }])
                       }
                     >
-                      <Icon name={item.icon} size={22} />
-                      {item.label}
+                      <Icon name={item.icon} size={24} />
                     </button>
                   );
                 })}
