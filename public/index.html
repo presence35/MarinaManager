@@ -200,9 +200,6 @@
       }
       .nav-item {
         flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         border: none;
         background: none;
         color: var(--text3);
@@ -212,6 +209,13 @@
       }
       .nav-item.active {
         color: var(--primary);
+      }
+      .nav-item-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
       }
       .nav-item svg {
         width: 24px;
@@ -5113,7 +5117,28 @@
         const { theme, darkMode, setTheme, setDarkMode } = useContext(ThemeCtx);
         const { employee, logout } = useContext(AuthCtx);
         const { navigate } = useContext(NavCtx);
+        const showToast = useContext(ToastCtx);
         const [version, setVersion] = useState("");
+
+        const handleExport = async () => {
+          try {
+            const res = await fetch("/api/export", {
+              headers: { Authorization: `Bearer ${getToken()}` },
+            });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `marina-backup-${new Date().toISOString().split("T")[0]}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            showToast(e.message);
+          }
+        };
 
         useEffect(() => {
           fetch("/api/version")
@@ -5280,15 +5305,17 @@
                 </button>
               )}
               {employee?.role === "admin" && (
-                <a
-                  href="/api/export"
-                  download
+                <button
+                  onClick={handleExport}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 12,
                     padding: "14px 16px",
-                    textDecoration: "none",
+                    width: "100%",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
                     borderBottom: "1px solid var(--border)",
                   }}
                 >
@@ -5313,7 +5340,7 @@
                   >
                     ›
                   </span>
-                </a>
+                </button>
               )}
               <button
                 onClick={logout}
@@ -5887,7 +5914,7 @@
                         setScreenStack([{ screen: item.key, params: {} }])
                       }
                     >
-                      <Icon name={item.icon} size={24} />
+                      <span className="nav-item-icon"><Icon name={item.icon} size={24} /></span>
                     </button>
                   );
                 })}
