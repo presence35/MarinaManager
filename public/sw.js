@@ -1,8 +1,6 @@
-const CACHE_NAME = 'marina-v5';
-const STATIC_ASSETS = ['/', '/index.html', '/manifest.json', '/logo.png', '/icon-192.png', '/icon-512.png', '/favicon.png'];
+const CACHE_NAME = 'marina-v6';
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS)));
   self.skipWaiting();
 });
 
@@ -15,7 +13,6 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // API calls — network first, no cache
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/photos/')) {
     e.respondWith(
       fetch(e.request).catch(() => new Response(JSON.stringify({ error: 'Offline' }), {
@@ -24,7 +21,6 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Static assets — cache first
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
       if (res.ok) {

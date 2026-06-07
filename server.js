@@ -235,6 +235,44 @@ module.exports = async function createApp() {
   // Migrate: add trailer_licence if missing
   try { db.exec('ALTER TABLE boats ADD COLUMN trailer_licence TEXT'); } catch(e) {}
 
+  // Migrate: add completed_by/completed_at/products_used to authorized_work
+  try { db.exec('ALTER TABLE authorized_work ADD COLUMN completed_by INTEGER REFERENCES employees(id)'); } catch(e) {}
+  try { db.exec('ALTER TABLE authorized_work ADD COLUMN completed_at TEXT'); } catch(e) {}
+  try { db.exec("ALTER TABLE authorized_work ADD COLUMN products_used TEXT DEFAULT '[]'"); } catch(e) {}
+
+  // Migrate: add invoice_status, tax_rate to service_cards
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN invoice_status TEXT DEFAULT 'draft'"); } catch(e) {}
+  try { db.exec('ALTER TABLE service_cards ADD COLUMN tax_rate REAL DEFAULT 13.0'); } catch(e) {}
+
+  // Create boat_assignments table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS boat_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      boat_id INTEGER NOT NULL,
+      employee_id INTEGER NOT NULL,
+      assigned_by INTEGER,
+      assigned_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(boat_id, employee_id),
+      FOREIGN KEY (boat_id) REFERENCES boats(id) ON DELETE CASCADE,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+      FOREIGN KEY (assigned_by) REFERENCES employees(id)
+    );
+  `);
+
+  // Create invoice_items table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      card_id INTEGER NOT NULL,
+      description TEXT NOT NULL,
+      quantity REAL DEFAULT 1,
+      unit_price REAL DEFAULT 0,
+      total REAL DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      FOREIGN KEY (card_id) REFERENCES service_cards(id) ON DELETE CASCADE
+    );
+  `);
+
   // Seed default admin if none exist
   const empCount = db.prepare('SELECT COUNT(*) as c FROM employees').get();
   if (empCount.c === 0) {
@@ -253,7 +291,10 @@ module.exports = async function createApp() {
 
   // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
   app.use(express.json({ limit: '10mb' }));
-  app.use(express.static(path.join(__dirname, 'public')));
+  const staticDir = fs.existsSync(path.join(__dirname, 'dist'))
+    ? path.join(__dirname, 'dist')
+    : path.join(__dirname, 'public');
+  app.use(express.static(staticDir));
   app.use('/photos', express.static(PHOTOS_DIR));
 
   const storage = multer.diskStorage({
@@ -409,19 +450,18 @@ module.exports = async function createApp() {
   });
 
   app.post('/api/boats', requireEditor, (req, res) => {
-    const { customer_id, name = null, motor_type = null, serial_no = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
+    const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
     if (!customer_id) return res.status(400).json({ error: 'Customer required' });
-    const r = db.prepare(`INSERT INTO boats (customer_id, name, motor_type, serial_no, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, serial_no, model, licence, trailer_licence, rate_type, length_ft);
+    const r = db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft);
     res.json({ id: r.lastInsertRowid });
   });
 
   app.put('/api/boats/:id', requireEditor, (req, res) => {
-    const { name, motor_type, serial_no, model, licence, trailer_licence, rate_type, length_ft } = req.body;
+    const { name, motor_type, model, licence, trailer_licence, rate_type, length_ft } = req.body;
     const updates = [];
     const params = [];
     if (name !== undefined) { updates.push('name = ?'); params.push(name); }
     if (motor_type !== undefined) { updates.push('motor_type = ?'); params.push(motor_type); }
-    if (serial_no !== undefined) { updates.push('serial_no = ?'); params.push(serial_no); }
     if (model !== undefined) { updates.push('model = ?'); params.push(model); }
     if (licence !== undefined) { updates.push('licence = ?'); params.push(licence); }
     if (trailer_licence !== undefined) { updates.push('trailer_licence = ?'); params.push(trailer_licence); }
@@ -431,12 +471,50 @@ module.exports = async function createApp() {
     res.json({ ok: true });
   });
 
+  // ─── BOAT ASSIGNMENTS ─────────────────────────────────────────────────────────
+  app.get('/api/assignments', requireAuth, (req, res) => {
+    const { employee_id } = req.query;
+    if (employee_id) {
+      res.json(db.prepare(`
+        SELECT ba.*, b.name as boat_name, c.name as customer_name
+        FROM boat_assignments ba
+        JOIN boats b ON ba.boat_id = b.id
+        JOIN customers c ON b.customer_id = c.id
+        WHERE ba.employee_id = ?
+        ORDER BY b.name
+      `).all(employee_id));
+    } else {
+      res.json(db.prepare(`
+        SELECT ba.*, b.name as boat_name, c.name as customer_name, e.name as employee_name, e.initials as employee_initials
+        FROM boat_assignments ba
+        JOIN boats b ON ba.boat_id = b.id
+        JOIN customers c ON b.customer_id = c.id
+        JOIN employees e ON ba.employee_id = e.id
+        ORDER BY e.name, b.name
+      `).all());
+    }
+  });
+
+  app.post('/api/assignments', requireEditor, (req, res) => {
+    const { boat_id, employee_id } = req.body;
+    if (!boat_id || !employee_id) return res.status(400).json({ error: 'Boat and employee required' });
+    try {
+      const r = db.prepare('INSERT OR IGNORE INTO boat_assignments (boat_id, employee_id, assigned_by) VALUES (?, ?, ?)').run(boat_id, employee_id, req.employee.id);
+      res.json({ id: r.lastInsertRowid });
+    } catch (e) { res.status(400).json({ error: 'Assignment failed' }); }
+  });
+
+  app.delete('/api/assignments/:id', requireEditor, (req, res) => {
+    db.prepare('DELETE FROM boat_assignments WHERE id = ?').run(req.params.id);
+    res.json({ ok: true });
+  });
+
   // ─── SERVICE CARDS ────────────────────────────────────────────────────────────
   const CARD_SELECT = `
     SELECT sc.*,
       c.name as customer_name, c.phone as customer_phone, c.email as customer_email,
       c.address, c.city, c.postal_code, c.id as customer_id,
-      b.name as boat_name, b.motor_type, b.model, b.serial_no, b.licence, b.trailer_licence, b.length_ft, b.rate_type,
+      b.name as boat_name, b.motor_type, b.model, b.licence, b.trailer_licence, b.length_ft, b.rate_type,
       e.name as created_by_name
     FROM service_cards sc
     JOIN boats b ON sc.boat_id = b.id
@@ -548,9 +626,39 @@ module.exports = async function createApp() {
   });
 
   app.put('/api/cards/:id/work', requireAuth, (req, res) => {
-    const upd = db.prepare('INSERT OR REPLACE INTO authorized_work (card_id, service_type, authorized, completed, notes) VALUES (?, ?, ?, ?, ?)');
-    (req.body.work || []).forEach(({ service_type, authorized, completed, notes }) => upd.run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null));
+    const upd = db.prepare('INSERT OR REPLACE INTO authorized_work (card_id, service_type, authorized, completed, notes, completed_by, completed_at, products_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    (req.body.work || []).forEach(({ service_type, authorized, completed, notes, completed_by, completed_at, products_used }) =>
+      upd.run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null, completed_by || null, completed_at || null, products_used ? JSON.stringify(products_used) : '[]'));
     db.prepare('UPDATE service_cards SET updated_at=datetime("now") WHERE id=?').run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ─── INVOICE ──────────────────────────────────────────────────────────────────
+  app.get('/api/cards/:id/invoice', requireAuth, (req, res) => {
+    const card = db.prepare(`SELECT id, invoice_number, invoice_status, tax_rate FROM service_cards WHERE id = ?`).get(req.params.id);
+    if (!card) return res.status(404).json({ error: 'Not found' });
+    card.items = db.prepare('SELECT * FROM invoice_items WHERE card_id = ? ORDER BY sort_order').all(req.params.id);
+    res.json(card);
+  });
+
+  app.put('/api/cards/:id/invoice', requireEditor, (req, res) => {
+    const { invoice_number, invoice_status, tax_rate, items } = req.body;
+    if (invoice_number !== undefined || invoice_status !== undefined || tax_rate !== undefined) {
+      const updates = [];
+      const params = [];
+      if (invoice_number !== undefined) { updates.push('invoice_number = ?'); params.push(invoice_number); }
+      if (invoice_status !== undefined) { updates.push('invoice_status = ?'); params.push(invoice_status); }
+      if (tax_rate !== undefined) { updates.push('tax_rate = ?'); params.push(tax_rate); }
+      if (updates.length) db.prepare(`UPDATE service_cards SET ${updates.join(', ')} WHERE id=?`).run(...params, req.params.id);
+    }
+    if (items) {
+      db.prepare('DELETE FROM invoice_items WHERE card_id = ?').run(req.params.id);
+      const ins = db.prepare('INSERT INTO invoice_items (card_id, description, quantity, unit_price, total, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+      items.forEach((item, i) => {
+        const total = (item.quantity || 1) * (item.unit_price || 0);
+        ins.run(req.params.id, item.description, item.quantity || 1, item.unit_price || 0, total, i);
+      });
+    }
     res.json({ ok: true });
   });
 
@@ -650,7 +758,7 @@ module.exports = async function createApp() {
 
   // Catch-all → serve index.html
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(staticDir, 'index.html'));
   });
 
   app.use((err, req, res, next) => {
