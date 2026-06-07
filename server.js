@@ -297,6 +297,10 @@ module.exports = async function createApp() {
   app.use(express.static(staticDir));
   app.use('/photos', express.static(PHOTOS_DIR));
 
+  // Health checks for GoDaddy / Kubernetes
+  app.get('/_health/liveness', (req, res) => res.json({ status: 'ok' }));
+  app.get('/_health/readiness', (req, res) => res.json({ status: 'ok' }));
+
   const storage = multer.diskStorage({
     destination: PHOTOS_DIR,
     filename: (req, file, cb) => {
