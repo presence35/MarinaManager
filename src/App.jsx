@@ -8,6 +8,20 @@ import AppShell from './AppShell'
 
 function App() {
   const { employee, login } = useContext(AuthCtx)
+  const [installPrompt, setInstallPrompt] = useState(null)
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('appinstalled', () => setInstallPrompt(null))
+  }, [])
 
   useEffect(() => {
     if (employee && getToken()) {
