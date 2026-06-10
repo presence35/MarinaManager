@@ -1205,9 +1205,6 @@
         { key: "tune_up", label: "Tune-Up" },
         { key: "lower_unit_drain", label: "Lower Unit" },
         { key: "prop_rebuild", label: "Prop Rebuild" },
-        { key: "algae_strip", label: "Algae Strip" },
-        { key: "wax", label: "Wax" },
-        { key: "shrink_wrap", label: "Shrink Wrap" },
         { key: "pickup", label: "Pickup" },
         { key: "delivery", label: "Delivery" },
       ];
@@ -1295,7 +1292,7 @@
             { key: "remove_valuables", label: "Remove valuables from boat" },
             {
               key: "cover_secure",
-              label: "Secure cover or prepare for shrink wrap",
+              label: "Secure cover",
             },
           ],
         },
@@ -1303,9 +1300,8 @@
 
       const SPRING_CHECKLIST = [
         {
-          cat: "Unwrap & Inspect",
+          cat: "Inspect",
           items: [
-            { key: "unwrap", label: "Remove shrink wrap / cover" },
             {
               key: "hull_inspect",
               label: "Inspect hull — note any winter damage",
@@ -1346,6 +1342,15 @@
               label: "Safety equipment present & serviceable",
             },
             { key: "ready_for_water", label: "Ready for water" },
+          ],
+        },
+      ];
+
+      const STORAGE_CHECKLIST = [
+        {
+          cat: "Wrapping",
+          items: [
+            { key: "wrap", label: "Shrink wrap boat" },
           ],
         },
       ];
@@ -1489,6 +1494,21 @@
               <path d="M9.5 12H2" />
               <path d="M10.23 10.23 5 5" />
               <circle cx="12" cy="12" r="2.5" />
+            </svg>
+          ),
+          settings: (
+            <svg
+              width={size}
+              height={size}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={color}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           ),
           back: (
@@ -2024,7 +2044,7 @@
                         </div>
                         <div className="job-card-meta">
                           <StatusBadge status={card.status} />
-                          {card.wrap_required && !card.wrap_done && (
+                          {card.wrap_required && (
                             <span
                               className="inline-chip"
                               style={{
@@ -2178,6 +2198,14 @@
             }
             return checked > 0 ? `${checked}/${total}` : null;
           }
+          if (key === 'storage') {
+            const existing = (card.checklists || []).find(c => c.checklist_type === 'storage');
+            let checked = 0, total = STORAGE_CHECKLIST.reduce((acc, cat) => acc + cat.items.length, 0);
+            if (existing) {
+              try { const items = JSON.parse(existing.items_json || '{}'); checked = Object.keys(items).filter(k => items[k]).length; } catch(e) {}
+            }
+            return checked > 0 ? `${checked}/${total}` : null;
+          }
           if (key === 'photos') {
             return (card.photos || []).length > 0 ? card.photos.length : null;
           }
@@ -2188,6 +2216,7 @@
         const isSpringStage = ['spring_checklist','ready'].includes(card.status);
         const isServiceStage = card.status === 'service';
         const isCleaningStage = card.status === 'cleaning';
+        const isStorageStage = card.status === 'storage';
 
         const tabs = [
           { key: "info", label: "Info" },
@@ -2196,6 +2225,7 @@
           ...(isServiceStage ? [{ key: "service_work", label: "Service Work" }] : []),
           ...(isCleaningStage ? [{ key: "cleaning_work", label: "Cleaning Work" }] : []),
           ...(isSpringStage ? [{ key: "spring_checklist", label: "Spring Checklist" }] : []),
+          ...(isStorageStage ? [{ key: "storage", label: "Storage" }] : []),
           { key: "logs", label: "Log" },
           { key: "photos", label: "Photos" },
         ];
@@ -2359,6 +2389,7 @@
             {tab === "service_work" && <ServiceWorkTab card={card} reload={reload} />}
             {tab === "cleaning_work" && <CleaningWorkTab card={card} reload={reload} />}
             {tab === "spring_checklist" && <ChecklistTab card={card} reload={reload} checklistType="spring" />}
+            {tab === "storage" && <StorageTab card={card} reload={reload} />}
             {tab === "logs" && <LogsTab card={card} reload={reload} />}
             {tab === "photos" && <PhotosTab card={card} reload={reload} />}
           </div>
@@ -2375,7 +2406,6 @@
           storage_location: card.storage_location || "",
           storage_type: card.storage_type || "",
           wrap_required: !!card.wrap_required,
-          wrap_done: !!card.wrap_done,
           remarks: card.remarks || "",
           other_work: card.other_work || "",
           invoice_number: card.invoice_number || "",
@@ -2684,14 +2714,6 @@
                     >
                       🎁 Wrap Required
                     </button>
-                    <button
-                      className={`chip ${form.wrap_done ? "on green" : ""}`}
-                      onClick={() =>
-                        setForm({ ...form, wrap_done: !form.wrap_done })
-                      }
-                    >
-                      ✓ Wrap Done
-                    </button>
                   </div>
 
                   <label
@@ -2783,14 +2805,7 @@
                         ?.label,
                     ],
                     ["Location", card.storage_location],
-                    [
-                      "Shrink Wrap",
-                      card.wrap_required
-                        ? card.wrap_done
-                          ? "✓ Done"
-                          : "Required"
-                        : "No",
-                    ],
+                    ["Shrink Wrap", card.wrap_required ? "Required" : "No"],
                     ["Date In", card.date_in],
                     ["Season", card.season_year],
                   ]
@@ -3339,7 +3354,18 @@
       // CLEANING WORK TAB
       function CleaningWorkTab({ card, reload }) {
         const showToast = useContext(ToastCtx);
+        const { employee } = useContext(AuthCtx);
         const [work, setWork] = useState(card.authorized_work || []);
+        const [unwrapDone, setUnwrapDone] = useState(!!card.unwrap_done);
+
+        const toggleUnwrap = async () => {
+          const next = !unwrapDone;
+          setUnwrapDone(next);
+          try {
+            await api("PUT", `/cards/${card.id}`, { unwrap_done: next });
+            reload();
+          } catch (e) { showToast("Save failed"); }
+        };
 
         const toggle = async (key, field) => {
           const updated = work.map((w) =>
@@ -3355,7 +3381,7 @@
         const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)));
         const allAuthCleaning = work.filter(w => w.authorized && cleanKeys.has(w.service_type));
 
-        if (allAuthCleaning.length === 0) {
+        if (allAuthCleaning.length === 0 && !card.wrap_required) {
           return <div style={{ padding: 20, textAlign: "center", color: "var(--text3)", fontFamily: "Barlow Condensed", fontWeight: 700, fontSize: 14 }}>No authorized cleaning tasks. Go to the Authorized tab first.</div>;
         }
 
@@ -3364,6 +3390,18 @@
             <div style={{ padding: "8px 16px 8px", fontFamily: "Barlow Condensed", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text3)", textTransform: "uppercase" }}>
               Slide to complete authorized cleaning tasks
             </div>
+            {card.wrap_required && (
+              <div style={{ margin: "0 12px 12px" }}>
+                <div style={{ fontFamily: "Barlow Condensed", fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: "var(--text2)", textTransform: "uppercase", padding: "14px 4px 6px", borderBottom: "1px solid var(--border)" }}>Unwrap</div>
+                <div className="card" style={{ marginTop: 6 }}>
+                  <SwipeableTask label="Unwrap boat" authorized={true} completed={unwrapDone}
+                    isLast={allAuthCleaning.length === 0}
+                    onToggleAuth={toggleUnwrap}
+                    onComplete={toggleUnwrap}
+                    onUncomplete={toggleUnwrap} />
+                </div>
+              </div>
+            )}
             {CLEANING_ITEMS.map((group) => {
               const groupItems = group.items.filter(w => allAuthCleaning.find(a => a.service_type === w.key));
               if (groupItems.length === 0) return null;
@@ -3381,7 +3419,7 @@
                           label={w.label}
                           authorized={true}
                           completed={!!entry.completed}
-                          isLast={i === groupItems.length - 1}
+                          isLast={i === groupItems.length - 1 && allAuthCleaning.length === 0}
                           onToggleAuth={() => {}}
                           onComplete={() => toggle(w.key, "completed")}
                           onUncomplete={() => toggle(w.key, "completed")}
@@ -3392,6 +3430,51 @@
                 </div>
               );
             })}
+          </div>
+        );
+      }
+
+      function StorageTab({ card, reload }) {
+        const showToast = useContext(ToastCtx);
+        const checklist = (card.checklists || []).find(c => c.checklist_type === 'storage');
+        const items = (() => { try { return JSON.parse(checklist?.items_json || '{}'); } catch { return {}; } })();
+        const allItems = STORAGE_CHECKLIST.flatMap(cat => cat.items);
+
+        const toggle = async (key) => {
+          const updated = { ...items, [key]: items[key] ? false : true };
+          try {
+            await api("POST", `/cards/${card.id}/checklists`, { checklist_type: "storage", items_json: JSON.stringify(updated) });
+            reload();
+          } catch (e) { showToast("Save failed"); }
+        };
+
+        if (allItems.length === 0) return null;
+
+        return (
+          <div>
+            <div style={{ padding: "8px 16px 8px", fontFamily: "Barlow Condensed", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text3)", textTransform: "uppercase" }}>
+              Complete storage tasks
+            </div>
+            <div className="card" style={{ margin: "0 12px" }}>
+              {STORAGE_CHECKLIST.map((group) => {
+                const groupItems = group.items;
+                return (
+                  <div key={group.cat}>
+                    <div style={{ fontFamily: "Barlow Condensed", fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: "var(--text2)", textTransform: "uppercase", padding: "14px 16px 6px", borderBottom: "1px solid var(--border)" }}>{group.cat}</div>
+                    {groupItems.map((w, i) => {
+                      const done = !!items[w.key];
+                      return (
+                        <SwipeableTask key={w.key} label={w.label} authorized={true} completed={done}
+                          isLast={i === groupItems.length - 1}
+                          onToggleAuth={() => toggle(w.key)}
+                          onComplete={() => toggle(w.key)}
+                          onUncomplete={() => toggle(w.key)} />
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       }
@@ -5845,7 +5928,7 @@
         { key: "customers", label: "People", icon: "user" },
         { key: "boats", label: "Boats", icon: "sailboat" },
         { key: "map", label: "Map", icon: "map" },
-        { key: "settings", label: "Setup", icon: "ship-wheel" },
+        { key: "settings", label: "Setup", icon: "settings" },
       ];
 
       function AppShell() {

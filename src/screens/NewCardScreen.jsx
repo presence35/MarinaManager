@@ -227,7 +227,7 @@ export default function NewCardScreen({ params = {} }) {
       </div>
       <div className="field">
         <label>Other Work / Notes</label>
-        <textarea placeholder="Trim not working, algae strip + wax..." value={cardForm.other_work}
+        <textarea placeholder="Trim not working, additional work requested..." value={cardForm.other_work}
           onChange={(e) => setCardForm({ ...cardForm, other_work: e.target.value })} />
       </div>
       <div className="field">

@@ -5,7 +5,7 @@ import { ToastCtx } from '../contexts/ToastCtx'
 import { api, getToken } from '../api'
 import {
   STATUS_CONFIG, STATUS_ORDER, RECEIVED_ITEMS, CONDITIONS,
-  AUTHORIZED_WORK, CLEANING_ITEMS, STORAGE_TYPES, FALL_CHECKLIST, SPRING_CHECKLIST,
+  AUTHORIZED_WORK, CLEANING_ITEMS, STORAGE_TYPES, STORAGE_CHECKLIST, FALL_CHECKLIST, SPRING_CHECKLIST,
 } from '../constants'
 import Icon from '../components/Icon'
 import StatusBadge from '../components/StatusBadge'
@@ -160,7 +160,12 @@ function InfoTab({ card, reload }) {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
               {STORAGE_TYPES.map((st) => (
                 <button key={st.key} className={`chip ${form.storage_type === st.key ? 'on' : ''}`}
-                  onClick={() => setForm({ ...form, storage_type: form.storage_type === st.key ? '' : st.key })}>
+                  onClick={() => {
+                    const newType = form.storage_type === st.key ? '' : st.key
+                    const upd = { ...form, storage_type: newType }
+                    if (newType === 'storage_building') { upd.wrap_required = false; upd.wrap_done = false }
+                    setForm(upd)
+                  }}>
                   {st.icon} {st.label}
                 </button>
               ))}
@@ -204,14 +209,16 @@ function InfoTab({ card, reload }) {
               {!form.storage_type && <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', padding: '6px 0' }}>Select a storage type above to configure location</div>}
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <button className={`chip ${form.wrap_required ? 'on warn' : ''}`} onClick={() => setForm({ ...form, wrap_required: !form.wrap_required })}>
-                {'\u{1F381}'} Wrap Required
-              </button>
-              <button className={`chip ${form.wrap_done ? 'on green' : ''}`} onClick={() => setForm({ ...form, wrap_done: !form.wrap_done })}>
-                {'\u2713'} Wrap Done
-              </button>
-            </div>
+            {form.storage_type && form.storage_type !== 'storage_building' && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button className={`chip ${form.wrap_required ? 'on warn' : ''}`} onClick={() => setForm({ ...form, wrap_required: !form.wrap_required })}>
+                  {'\u{1F381}'} Wrap Required
+                </button>
+                <button className={`chip ${form.wrap_done ? 'on green' : ''}`} onClick={() => setForm({ ...form, wrap_done: !form.wrap_done })}>
+                  {'\u2713'} Wrap Done
+                </button>
+              </div>
+            )}
 
             <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Other Work Requested</label>
             <textarea placeholder="Trim not working? Customer requests..." style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none', resize: 'vertical', minHeight: 60, marginBottom: 12 }}
@@ -513,6 +520,16 @@ function CleaningWorkTab({ card, reload }) {
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
   const [productInputs, setProductInputs] = useState({})
+  const [unwrapDone, setUnwrapDone] = useState(!!card.unwrap_done)
+
+  const toggleUnwrap = async () => {
+    const next = !unwrapDone
+    setUnwrapDone(next)
+    try {
+      await api('PUT', `/cards/${card.id}`, { unwrap_done: next })
+      reload()
+    } catch (e) { showToast('Save failed') }
+  }
 
   const toggle = async (key, field) => {
     const now = new Date().toISOString()
@@ -567,7 +584,7 @@ function CleaningWorkTab({ card, reload }) {
   const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)))
   const allAuthCleaning = work.filter(w => w.authorized && cleanKeys.has(w.service_type))
 
-  if (allAuthCleaning.length === 0) {
+  if (allAuthCleaning.length === 0 && !card.wrap_required) {
     return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)', fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14 }}>No authorized cleaning tasks. Go to the Authorized tab first.</div>
   }
 
@@ -576,6 +593,18 @@ function CleaningWorkTab({ card, reload }) {
       <div style={{ padding: '8px 16px 8px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>
         Tap or slide to complete authorized cleaning tasks
       </div>
+      {card.wrap_required && (
+        <div style={{ margin: '0 12px 12px' }}>
+          <div style={{ fontFamily: 'Barlow Condensed', fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase', padding: '14px 4px 6px', borderBottom: '1px solid var(--border)' }}>Unwrap</div>
+          <div className="card" style={{ marginTop: 6 }}>
+            <SwipeableTask label="Unwrap boat" authorized={true} completed={unwrapDone}
+              isLast={allAuthCleaning.length === 0}
+              onToggleAuth={toggleUnwrap}
+              onComplete={toggleUnwrap}
+              onUncomplete={toggleUnwrap} />
+          </div>
+        </div>
+      )}
       {CLEANING_ITEMS.map((group) => {
         const groupItems = group.items.filter(w => allAuthCleaning.find(a => a.service_type === w.key))
         if (groupItems.length === 0) return null
@@ -630,6 +659,55 @@ function CleaningWorkTab({ card, reload }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function StorageTab({ card, reload }) {
+  const showToast = useContext(ToastCtx)
+  const { employee } = useContext(AuthCtx)
+  const checklist = (card.checklists || []).find(c => c.checklist_type === 'storage')
+  const items = useMemo(() => {
+    try { return JSON.parse(checklist?.items_json || '{}') }
+    catch { return {} }
+  }, [checklist])
+  const allItems = STORAGE_CHECKLIST.flatMap(cat => cat.items)
+
+  const toggle = async (key) => {
+    const updated = { ...items, [key]: items[key] ? false : true }
+    try {
+      await api('POST', `/cards/${card.id}/checklists`, { checklist_type: 'storage', items_json: JSON.stringify(updated) })
+      reload()
+    } catch (e) { showToast('Save failed') }
+  }
+
+  if (allItems.length === 0) return null
+
+  return (
+    <div>
+      <div style={{ padding: '8px 16px 8px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>
+        Complete storage tasks
+      </div>
+      <div className="card" style={{ margin: '0 12px' }}>
+        {STORAGE_CHECKLIST.map((group) => {
+          const groupItems = group.items
+          return (
+            <div key={group.cat}>
+              <div style={{ fontFamily: 'Barlow Condensed', fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase', padding: '14px 16px 6px', borderBottom: '1px solid var(--border)' }}>{group.cat}</div>
+              {groupItems.map((w, i) => {
+                const done = !!items[w.key]
+                return (
+                  <SwipeableTask key={w.key} label={w.label} authorized={true} completed={done}
+                    isLast={i === groupItems.length - 1}
+                    onToggleAuth={() => toggle(w.key)}
+                    onComplete={() => toggle(w.key)}
+                    onUncomplete={() => toggle(w.key)} />
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -832,9 +910,9 @@ function ChecklistTab({ card, reload, checklistType }) {
                         return (
                           <button key={r} onClick={() => setRating(item.key, rating === r ? '' : r)}
                             style={{
-                              padding: '5px 14px', borderRadius: 6, border: `2px solid ${colors[r]}`,
+                              padding: '5px 14px', borderRadius: 6, border: `1px solid ${colors[r]}`,
                               background: rating === r ? colors[r] : 'transparent',
-                              color: rating === r ? '#fff' : colors[r],
+                              color: rating === r ? '#fff' : 'var(--text2)',
                               fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 12,
                               textTransform: 'uppercase', cursor: 'pointer', letterSpacing: 0.5,
                               transition: 'all .15s',
@@ -1071,7 +1149,7 @@ function InvoiceTab({ card, reload }) {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-outline btn-sm" style={{ width: 'auto' }} onClick={openPrint}>
-            <Icon name="download" size={14} /> Print
+            <Icon name="print" size={14} /> Print
           </button>
         </div>
       </div>
@@ -1248,6 +1326,14 @@ export default function CardDetailScreen({ params = {} }) {
       }
       return checked > 0 ? `${checked}/${total}` : null
     }
+    if (key === 'storage') {
+      const existing = (card.checklists || []).find(c => c.checklist_type === 'storage')
+      let checked = 0, total = STORAGE_CHECKLIST.reduce((acc, cat) => acc + cat.items.length, 0)
+      if (existing) {
+        try { const items = JSON.parse(existing.items_json || '{}'); checked = Object.keys(items).filter(k => items[k]).length } catch (e) {}
+      }
+      return checked > 0 ? `${checked}/${total}` : null
+    }
     if (key === 'photos') return (card.photos || []).length > 0 ? card.photos.length : null
     return null
   }
@@ -1256,6 +1342,7 @@ export default function CardDetailScreen({ params = {} }) {
   const isSpringStage = ['spring_checklist', 'ready'].includes(card.status)
   const isServiceStage = card.status === 'service'
   const isCleaningStage = card.status === 'cleaning'
+  const isStorageStage = card.status === 'storage'
 
   const tabs = [
     { key: 'info', label: 'Info' },
@@ -1264,6 +1351,7 @@ export default function CardDetailScreen({ params = {} }) {
     ...(isServiceStage ? [{ key: 'service_work', label: 'Service Work' }] : []),
     ...(isCleaningStage ? [{ key: 'cleaning_work', label: 'Cleaning Work' }] : []),
     ...(isSpringStage ? [{ key: 'spring_checklist', label: 'Spring Checklist' }] : []),
+    ...(isStorageStage ? [{ key: 'storage', label: 'Storage' }] : []),
     { key: 'invoice', label: 'Invoice' },
     { key: 'logs', label: 'Log' },
     { key: 'photos', label: 'Photos' },
@@ -1311,14 +1399,14 @@ export default function CardDetailScreen({ params = {} }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, padding: '10px 12px 0' }}>
+      <div style={{ display: 'flex', gap: 8, padding: '10px 12px' }}>
         {prevStatus && (
-          <button className="btn btn-outline" onClick={retreatStatus} disabled={saving} style={{ flex: 1, opacity: saving ? 0.7 : 1 }}>
+          <button className="btn btn-outline" onClick={retreatStatus} disabled={saving} style={{ flex: 1, minWidth: 0, opacity: saving ? 0.7 : 1 }}>
             {'\u2190'} {STATUS_CONFIG[prevStatus].label}
           </button>
         )}
         {nextStatus && (
-          <button className="btn btn-accent" onClick={advanceStatus} disabled={saving} style={{ flex: 1, opacity: saving ? 0.7 : 1 }}>
+          <button className="btn btn-accent" onClick={advanceStatus} disabled={saving} style={{ flex: 1, minWidth: 0, opacity: saving ? 0.7 : 1 }}>
             {STATUS_CONFIG[nextStatus].label} {'\u2192'}
           </button>
         )}
@@ -1363,7 +1451,7 @@ export default function CardDetailScreen({ params = {} }) {
             <script>window.print()</script></body></html>`)
           w.document.close()
         }} title="Print Service Card">
-          <Icon name="download" size={14} /> Print
+          <Icon name="print" size={14} /> Print
         </button>
       </div>
 
@@ -1389,6 +1477,7 @@ export default function CardDetailScreen({ params = {} }) {
       {tab === 'service_work' && <ServiceWorkTab card={card} reload={reload} />}
       {tab === 'cleaning_work' && <CleaningWorkTab card={card} reload={reload} />}
       {tab === 'spring_checklist' && <ChecklistTab card={card} reload={reload} checklistType="spring" />}
+      {tab === 'storage' && <StorageTab card={card} reload={reload} />}
       {tab === 'invoice' && <InvoiceTab card={card} reload={reload} />}
       {tab === 'logs' && <LogsTab card={card} reload={reload} />}
       {tab === 'photos' && <PhotosTab card={card} reload={reload} />}

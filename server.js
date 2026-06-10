@@ -118,7 +118,6 @@ module.exports = async function createApp() {
       storage_type TEXT,
       storage_location TEXT,
       wrap_required INTEGER DEFAULT 0,
-      wrap_done INTEGER DEFAULT 0,
       remarks TEXT,
       other_work TEXT,
       date_in TEXT,
@@ -243,6 +242,9 @@ module.exports = async function createApp() {
   // Migrate: add invoice_status, tax_rate to service_cards
   try { db.exec("ALTER TABLE service_cards ADD COLUMN invoice_status TEXT DEFAULT 'draft'"); } catch(e) {}
   try { db.exec('ALTER TABLE service_cards ADD COLUMN tax_rate REAL DEFAULT 13.0'); } catch(e) {}
+
+  // Migrate: add unwrap_done to service_cards
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN unwrap_done INTEGER DEFAULT 0"); } catch(e) {}
 
   // Create boat_assignments table
   db.exec(`
@@ -567,7 +569,7 @@ module.exports = async function createApp() {
   });
 
   const RECEIVED_ITEMS = ['battery', 'keys', 'cover', 'paddles', 'life_jackets', 'cushions', 'gas_cans', 'tie_ropes', 'lights'];
-  const SERVICES = ['oil_change', 'outdrive_service', 'tune_up', 'lower_unit_drain', 'prop_rebuild', 'pickup', 'delivery', 'algae_strip', 'wax', 'shrink_wrap'];
+  const SERVICES = ['oil_change', 'outdrive_service', 'tune_up', 'lower_unit_drain', 'prop_rebuild', 'pickup', 'delivery'];
   const CLEANING_SERVICES = ['int_quick_wipe', 'int_power_wash', 'int_spotless', 'ext_quick_wipe', 'ext_power_wash', 'ext_algae_wax', 'ext_buff_polish'];
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
@@ -596,10 +598,10 @@ module.exports = async function createApp() {
     if (!card) return res.status(404).json({ error: 'Not found' });
 
     const isEditor = req.employee.role === 'admin' || req.employee.role === 'office';
-    const { status, storage_type, storage_location, wrap_required, wrap_done, remarks, other_work, date_out, invoice_number, work_order_no } = req.body;
+    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no } = req.body;
     
     if (!isEditor) {
-       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'wrap_done', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no'];
+       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no'];
        const hasProtected = protectedKeys.some(k => req.body[k] !== undefined);
        if (hasProtected) return res.status(403).json({ error: 'Only admin and office can edit relevant data' });
     }
@@ -610,11 +612,11 @@ module.exports = async function createApp() {
     db.prepare(`UPDATE service_cards SET
       status = COALESCE(?, status), storage_type = COALESCE(?, storage_type),
       storage_location = COALESCE(?, storage_location),
-      wrap_required = COALESCE(?, wrap_required), wrap_done = COALESCE(?, wrap_done),
+      wrap_required = COALESCE(?, wrap_required),
       remarks = COALESCE(?, remarks), other_work = COALESCE(?, other_work),
       date_out = COALESCE(?, date_out), invoice_number = COALESCE(?, invoice_number),
       work_order_no = COALESCE(?, work_order_no), updated_at = datetime('now')
-      WHERE id = ?`).run(status ?? null, storage_type ?? null, storage_location ?? null, wrap_required != null ? (wrap_required ? 1 : 0) : null, wrap_done != null ? (wrap_done ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, id);
+      WHERE id = ?`).run(status ?? null, storage_type ?? null, storage_location ?? null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, id);
     res.json({ ok: true });
   });
 
@@ -740,7 +742,14 @@ module.exports = async function createApp() {
 
   // ─── WRAP QUEUE ───────────────────────────────────────────────────────────────
   app.get('/api/wrap-queue', requireAuth, (req, res) => {
-    res.json(db.prepare(`${CARD_SELECT} WHERE sc.wrap_required=1 AND sc.wrap_done=0 AND sc.status IN ('fall_checklist','storage') ORDER BY c.name`).all());
+    res.json(db.prepare(`
+      ${CARD_SELECT}
+      LEFT JOIN checklist_completions cc ON cc.card_id = sc.id AND cc.checklist_type = 'storage'
+      WHERE sc.wrap_required=1
+        AND (cc.id IS NULL OR json_extract(cc.items_json, '$.wrap') IS NOT 1)
+        AND sc.status IN ('fall_checklist','storage')
+      ORDER BY c.name
+    `).all());
   });
 
   // ─── VERSION ──────────────────────────────────────────────────────────────────

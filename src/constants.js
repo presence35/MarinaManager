@@ -2,6 +2,8 @@ export const STATUS_CONFIG = {
   intake: { label: 'INTAKE', color: '#7c6fcd', bg: 'rgba(124,111,205,.15)', stripe: '#7c6fcd' },
   fall_checklist: { label: 'FALL CHECK', color: '#e07b39', bg: 'rgba(224,123,57,.15)', stripe: '#e07b39' },
   storage: { label: 'IN STORAGE', color: '#5b9bd5', bg: 'rgba(91,155,213,.15)', stripe: '#5b9bd5' },
+  service: { label: 'SERVICE', color: '#e07b39', bg: 'rgba(224,123,57,.15)', stripe: '#e07b39' },
+  cleaning: { label: 'CLEANING', color: '#06b88a', bg: 'rgba(6,184,138,.15)', stripe: '#06b88a' },
   spring_checklist: { label: 'SPRING CHECK', color: '#52b788', bg: 'rgba(82,183,136,.15)', stripe: '#52b788' },
   ready: { label: 'READY', color: '#2da84f', bg: 'rgba(45,168,79,.15)', stripe: '#2da84f' },
   invoiced: { label: 'INVOICED', color: '#e8b42e', bg: 'rgba(232,180,46,.15)', stripe: '#e8b42e' },
@@ -42,9 +44,6 @@ export const AUTHORIZED_WORK = [
   { key: 'tune_up', label: 'Tune-Up' },
   { key: 'lower_unit_drain', label: 'Lower Unit' },
   { key: 'prop_rebuild', label: 'Prop Rebuild' },
-  { key: 'algae_strip', label: 'Algae Strip' },
-  { key: 'wax', label: 'Wax' },
-  { key: 'shrink_wrap', label: 'Shrink Wrap' },
   { key: 'pickup', label: 'Pickup' },
   { key: 'delivery', label: 'Delivery' },
 ]
@@ -112,16 +111,15 @@ export const FALL_CHECKLIST = [
     items: [
       { key: 'drain_livewells', label: 'Drain all livewells / baitwells' },
       { key: 'remove_valuables', label: 'Remove valuables from boat' },
-      { key: 'cover_secure', label: 'Secure cover or prepare for shrink wrap' },
+      { key: 'cover_secure', label: 'Secure cover' },
     ],
   },
 ]
 
 export const SPRING_CHECKLIST = [
   {
-    cat: 'Unwrap & Inspect',
+    cat: 'Inspect',
     items: [
-      { key: 'unwrap', label: 'Remove shrink wrap / cover' },
       { key: 'hull_inspect', label: 'Inspect hull — note any winter damage' },
       { key: 'bilge_inspect', label: 'Check bilge — clear of water & debris' },
     ],
@@ -153,6 +151,15 @@ export const SPRING_CHECKLIST = [
       { key: 'clean_interior', label: 'Clean interior' },
       { key: 'safety_check', label: 'Safety equipment present & serviceable' },
       { key: 'ready_for_water', label: 'Ready for water' },
+    ],
+  },
+]
+
+export const STORAGE_CHECKLIST = [
+  {
+    cat: 'Wrapping',
+    items: [
+      { key: 'wrap', label: 'Shrink wrap boat' },
     ],
   },
 ]

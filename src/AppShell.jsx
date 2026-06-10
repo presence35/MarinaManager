@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { key: 'customers', label: 'People', icon: 'user' },
   { key: 'boats', label: 'Boats', icon: 'boat' },
   { key: 'map', label: 'Map', icon: 'map' },
-  { key: 'settings', label: 'Setup', icon: 'ship-wheel' },
+  { key: 'settings', label: 'Setup', icon: 'settings' },
 ]
 
 export default function AppShell() {

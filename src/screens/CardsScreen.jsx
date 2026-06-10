@@ -115,7 +115,7 @@ export default function CardsScreen({ params = {} }) {
           <div className="job-card-owner">{card.customer_name} {'\u00B7'} {card.motor_type || '—'}</div>
           <div className="job-card-meta">
             <StatusBadge status={card.status} />
-            {card.wrap_required && !card.wrap_done && (
+            {card.wrap_required && (
               <span className="inline-chip" style={{ borderColor: 'var(--warn)', color: 'var(--warn)' }}>WRAP</span>
             )}
             {card.storage_location && (
