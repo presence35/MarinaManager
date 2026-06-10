@@ -246,6 +246,13 @@ module.exports = async function createApp() {
   // Migrate: add unwrap_done to service_cards
   try { db.exec("ALTER TABLE service_cards ADD COLUMN unwrap_done INTEGER DEFAULT 0"); } catch(e) {}
 
+  // Migrate: add storage location structured fields
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN storage_building TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN storage_row TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN storage_col TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN boathouse_no INTEGER"); } catch(e) {}
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN slip_no INTEGER"); } catch(e) {}
+
   // Create boat_assignments table
   db.exec(`
     CREATE TABLE IF NOT EXISTS boat_assignments (
@@ -574,12 +581,27 @@ module.exports = async function createApp() {
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
   app.post('/api/cards', requireEditor, (req, res) => {
-    const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in } = req.body;
+    const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no } = req.body;
     if (!boat_id) return res.status(400).json({ error: 'Boat required' });
+
+    let storage_location = null
+    if (storage_type === 'storage_building' && (storage_building || storage_row || storage_col)) {
+      const parts = []
+      if (storage_building) parts.push(storage_building)
+      if (storage_row) parts.push('Row ' + storage_row)
+      if (storage_col) parts.push('Column ' + storage_col)
+      storage_location = parts.join(', ')
+    } else if ((storage_type === 'marina_boathouse' || storage_type === 'customer_boathouse') && (boathouse_no || slip_no)) {
+      const parts = []
+      if (boathouse_no) parts.push('Boathouse ' + boathouse_no)
+      if (slip_no) parts.push('Slip ' + slip_no)
+      storage_location = parts.join(', ')
+    }
+
     const r = db.prepare(`
-      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id);
+      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, storage_location, storage_building, storage_row, storage_col, boathouse_no, slip_no, wrap_required, remarks, other_work, date_in, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, storage_location, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id);
     const cardId = r.lastInsertRowid;
     const ii = db.prepare('INSERT OR IGNORE INTO received_items (card_id, item) VALUES (?, ?)');
     RECEIVED_ITEMS.forEach(item => ii.run(cardId, item));
@@ -598,12 +620,27 @@ module.exports = async function createApp() {
     if (!card) return res.status(404).json({ error: 'Not found' });
 
     const isEditor = req.employee.role === 'admin' || req.employee.role === 'office';
-    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no } = req.body;
+    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no, storage_building, storage_row, storage_col, boathouse_no, slip_no } = req.body;
     
     if (!isEditor) {
-       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no'];
+       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no', 'storage_building', 'storage_row', 'storage_col', 'boathouse_no', 'slip_no'];
        const hasProtected = protectedKeys.some(k => req.body[k] !== undefined);
        if (hasProtected) return res.status(403).json({ error: 'Only admin and office can edit relevant data' });
+    }
+
+    // Compute storage_location from structured fields if provided
+    let computedLoc = storage_location
+    if (storage_type === 'storage_building' && (storage_building || storage_row || storage_col)) {
+      const parts = []
+      if (storage_building) parts.push(storage_building)
+      if (storage_row) parts.push('Row ' + storage_row)
+      if (storage_col) parts.push('Column ' + storage_col)
+      computedLoc = parts.join(', ')
+    } else if ((storage_type === 'marina_boathouse' || storage_type === 'customer_boathouse') && (boathouse_no || slip_no)) {
+      const parts = []
+      if (boathouse_no) parts.push('Boathouse ' + boathouse_no)
+      if (slip_no) parts.push('Slip ' + slip_no)
+      computedLoc = parts.join(', ')
     }
 
     if (status && status !== card.status) {
@@ -612,11 +649,16 @@ module.exports = async function createApp() {
     db.prepare(`UPDATE service_cards SET
       status = COALESCE(?, status), storage_type = COALESCE(?, storage_type),
       storage_location = COALESCE(?, storage_location),
+      storage_building = COALESCE(?, storage_building),
+      storage_row = COALESCE(?, storage_row),
+      storage_col = COALESCE(?, storage_col),
+      boathouse_no = COALESCE(?, boathouse_no),
+      slip_no = COALESCE(?, slip_no),
       wrap_required = COALESCE(?, wrap_required),
       remarks = COALESCE(?, remarks), other_work = COALESCE(?, other_work),
       date_out = COALESCE(?, date_out), invoice_number = COALESCE(?, invoice_number),
       work_order_no = COALESCE(?, work_order_no), updated_at = datetime('now')
-      WHERE id = ?`).run(status ?? null, storage_type ?? null, storage_location ?? null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, id);
+      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, id);
     res.json({ ok: true });
   });
 
@@ -634,7 +676,7 @@ module.exports = async function createApp() {
   app.put('/api/cards/:id/work', requireAuth, (req, res) => {
     const upd = db.prepare('INSERT OR REPLACE INTO authorized_work (card_id, service_type, authorized, completed, notes, completed_by, completed_at, products_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     (req.body.work || []).forEach(({ service_type, authorized, completed, notes, completed_by, completed_at, products_used }) =>
-      upd.run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null, completed_by || null, completed_at || null, products_used ? JSON.stringify(products_used) : '[]'));
+      upd.run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null, completed_by || null, completed_at || null,         (() => { try { const p = typeof products_used === 'string' ? JSON.parse(products_used) : (products_used || []); return Array.isArray(p) ? JSON.stringify(p) : '[]'; } catch { return '[]'; } })()));
     db.prepare('UPDATE service_cards SET updated_at=datetime("now") WHERE id=?').run(req.params.id);
     res.json({ ok: true });
   });

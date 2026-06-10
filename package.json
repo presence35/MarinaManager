@@ -1,6 +1,6 @@
 {
   "name": "marina-repair-app",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Campbell's Landing Marina - Service & Storage Management",
   "main": "server.js",
   "scripts": {

@@ -164,6 +164,12 @@ export const STORAGE_CHECKLIST = [
   },
 ]
 
+export const BUILDING_NAMES = ['Metal 1', 'Metal 2', 'Metal 3', 'Metal 4']
+export const BOATHOUSE_COUNT = 8
+export const BOATHOUSE_SLIPS = 10
+export const STORAGE_ROWS = [1, 2, 3, 4, 5]
+export const STORAGE_COLS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+
 export const STORAGE_TYPES = [
   { key: 'customer_boathouse', label: 'Customer Boathouse', icon: '\u{1F3E0}' },
   { key: 'marina_boathouse', label: 'Marina Boathouse', icon: '\u{1F3E0}' },

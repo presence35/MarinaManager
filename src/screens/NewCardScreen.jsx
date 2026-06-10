@@ -2,7 +2,7 @@ import { useState, useEffect, useContext } from 'react'
 import { NavCtx } from '../contexts/NavCtx'
 import { ToastCtx } from '../contexts/ToastCtx'
 import { api } from '../api'
-import { STORAGE_TYPES } from '../constants'
+import { STORAGE_TYPES, BUILDING_NAMES, BOATHOUSE_COUNT, BOATHOUSE_SLIPS, STORAGE_ROWS, STORAGE_COLS } from '../constants'
 import Icon from '../components/Icon'
 
 export default function NewCardScreen({ params = {} }) {
@@ -24,6 +24,11 @@ export default function NewCardScreen({ params = {} }) {
     remarks: '',
     other_work: '',
     date_in: new Date().toISOString().split('T')[0],
+    storage_building: '',
+    storage_row: '',
+    storage_col: '',
+    boathouse_no: '',
+    slip_no: '',
   })
   const [saving, setSaving] = useState(false)
   const [creatingCustomer, setCreatingCustomer] = useState(params.target === 'customer')
@@ -213,12 +218,53 @@ export default function NewCardScreen({ params = {} }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {STORAGE_TYPES.map((st) => (
             <button key={st.key} className={`chip ${cardForm.storage_type === st.key ? 'on' : ''}`}
-              onClick={() => setCardForm({ ...cardForm, storage_type: cardForm.storage_type === st.key ? '' : st.key })}>
+              onClick={() => setCardForm({ ...cardForm, storage_type: cardForm.storage_type === st.key ? '' : st.key, storage_building: '', storage_row: '', storage_col: '', boathouse_no: '', slip_no: '' })}>
               {st.icon} {st.label}
             </button>
           ))}
         </div>
       </div>
+      {(cardForm.storage_type === 'marina_boathouse' || cardForm.storage_type === 'customer_boathouse') && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <label style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Boathouse Location</label>
+          <div className="row-2">
+            <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+              value={cardForm.boathouse_no} onChange={(e) => setCardForm({ ...cardForm, boathouse_no: e.target.value })}>
+              <option value="">Boathouse #</option>
+              {Array.from({ length: BOATHOUSE_COUNT }, (_, i) => i + 1).map(n => <option key={n} value={n}>Boathouse {n}</option>)}
+            </select>
+            <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+              value={cardForm.slip_no} onChange={(e) => setCardForm({ ...cardForm, slip_no: e.target.value })}>
+              <option value="">Slip #</option>
+              {Array.from({ length: BOATHOUSE_SLIPS }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+      {cardForm.storage_type === 'storage_building' && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <label style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Building Location</label>
+          <div className="row-2" style={{ marginBottom: 8 }}>
+            <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+              value={cardForm.storage_building} onChange={(e) => setCardForm({ ...cardForm, storage_building: e.target.value })}>
+              <option value="">Building</option>
+              {BUILDING_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+              value={cardForm.storage_row} onChange={(e) => setCardForm({ ...cardForm, storage_row: e.target.value })}>
+              <option value="">Row</option>
+              {STORAGE_ROWS.map(n => <option key={n} value={n}>Row {n}</option>)}
+            </select>
+          </div>
+          <div className="row-2">
+            <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+              value={cardForm.storage_col} onChange={(e) => setCardForm({ ...cardForm, storage_col: e.target.value })}>
+              <option value="">Column</option>
+              {STORAGE_COLS.map(l => <option key={l} value={l}>Column {l}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
       <div style={{ padding: '0 16px 12px' }}>
         <button className={`chip ${cardForm.wrap_required ? 'on warn' : ''}`}
           onClick={() => setCardForm({ ...cardForm, wrap_required: !cardForm.wrap_required })}>

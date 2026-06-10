@@ -1,11 +1,11 @@
-import { useState, useEffect, useContext } from 'react'
+import { useState, useEffect, useContext, useRef } from 'react'
 import { NavCtx } from '../contexts/NavCtx'
 import { AuthCtx } from '../contexts/AuthCtx'
 import { ToastCtx } from '../contexts/ToastCtx'
 import { api } from '../api'
 import Icon from '../components/Icon'
 
-export default function BoatsScreen() {
+export default function BoatsScreen({ params }) {
   const { navigate } = useContext(NavCtx)
   const { employee } = useContext(AuthCtx)
   const showToast = useContext(ToastCtx)
@@ -13,6 +13,7 @@ export default function BoatsScreen() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [editingBoat, setEditingBoat] = useState(null)
+  const handledAutoOpen = useRef(false)
 
   const fetchBoats = () => {
     setLoading(true)
@@ -23,6 +24,16 @@ export default function BoatsScreen() {
   }
 
   useEffect(() => { fetchBoats() }, [search])
+
+  useEffect(() => {
+    if (params?.editBoatId && boats.length > 0 && !handledAutoOpen.current) {
+      const boat = boats.find(b => b.id === params.editBoatId)
+      if (boat) {
+        setEditingBoat(boat)
+        handledAutoOpen.current = true
+      }
+    }
+  }, [params?.editBoatId, boats])
 
   const navigateToBoatCard = async (boat) => {
     try {

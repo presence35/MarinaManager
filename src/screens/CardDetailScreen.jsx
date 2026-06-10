@@ -6,6 +6,7 @@ import { api, getToken } from '../api'
 import {
   STATUS_CONFIG, STATUS_ORDER, RECEIVED_ITEMS, CONDITIONS,
   AUTHORIZED_WORK, CLEANING_ITEMS, STORAGE_TYPES, STORAGE_CHECKLIST, FALL_CHECKLIST, SPRING_CHECKLIST,
+  BUILDING_NAMES, BOATHOUSE_COUNT, BOATHOUSE_SLIPS, STORAGE_ROWS, STORAGE_COLS,
 } from '../constants'
 import Icon from '../components/Icon'
 import StatusBadge from '../components/StatusBadge'
@@ -14,58 +15,29 @@ import SwipeableTask from '../components/SwipeableTask'
 
 function InfoTab({ card, reload }) {
   const showToast = useContext(ToastCtx)
+  const { navigate } = useContext(NavCtx)
   const { employee } = useContext(AuthCtx)
   const [editing, setEditing] = useState(false)
-  const [editingBoat, setEditingBoat] = useState(false)
-  const [boatForm, setBoatForm] = useState({
-    name: card.boat_name || '',
-    motor_type: card.motor_type || '',
-    model: card.model || '',
-    licence: card.licence || '',
-    trailer_licence: card.trailer_licence || '',
-    length_ft: card.length_ft || '',
-    rate_type: card.rate_type || 'SW',
-  })
   const [form, setForm] = useState({
     work_order_no: card.work_order_no || '',
-    storage_location: card.storage_location || '',
     storage_type: card.storage_type || '',
     wrap_required: !!card.wrap_required,
     wrap_done: !!card.wrap_done,
     remarks: card.remarks || '',
     other_work: card.other_work || '',
     invoice_number: card.invoice_number || '',
-    storage_building: '',
-    storage_row: '',
-    storage_col: '',
-    storage_level: '',
+    storage_building: card.storage_building || '',
+    storage_row: card.storage_row || '',
+    storage_col: card.storage_col || '',
+    boathouse_no: card.boathouse_no || '',
+    slip_no: card.slip_no || '',
   })
 
   const save = async () => {
     try {
-      let loc = form.storage_location
-      if (form.storage_type === 'customer_boathouse' || form.storage_type === 'marina_boathouse') {
-        loc = form.storage_location || ''
-      } else if (form.storage_type === 'storage_building') {
-        const parts = []
-        if (form.storage_building) parts.push(`Bldg ${form.storage_building}`)
-        if (form.storage_row) parts.push(`Row ${form.storage_row}`)
-        if (form.storage_col) parts.push(`Col ${form.storage_col}`)
-        if (form.storage_level) parts.push(`Lvl ${form.storage_level}`)
-        loc = parts.join(', ')
-      }
-      await api('PUT', `/cards/${card.id}`, { ...form, storage_location: loc })
+      await api('PUT', `/cards/${card.id}`, form)
       showToast('Saved')
       setEditing(false)
-      reload()
-    } catch (e) { showToast('Save failed') }
-  }
-
-  const saveBoatInfo = async () => {
-    try {
-      await api('PUT', `/boats/${card.boat_id}`, boatForm)
-      showToast('Boat saved')
-      setEditingBoat(false)
       reload()
     } catch (e) { showToast('Save failed') }
   }
@@ -88,48 +60,26 @@ function InfoTab({ card, reload }) {
       <div className="section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
         <span>Boat</span>
         {(employee?.role === 'admin' || employee?.role === 'office') && (
-          <button className="btn btn-outline btn-sm" style={{ width: 'auto', padding: '5px 12px' }} onClick={() => setEditingBoat(!editingBoat)}>
-            <Icon name="edit" size={14} /> {editingBoat ? 'Cancel' : 'Edit'}
+          <button className="btn btn-outline btn-sm" style={{ width: 'auto', padding: '5px 12px' }} onClick={() => navigate('boats', { editBoatId: card.boat_id })}>
+            <Icon name="edit" size={14} /> Edit
           </button>
         )}
       </div>
 
-      {editingBoat ? (
-        <div className="card" style={{ margin: '0 12px 10px' }}>
-          <div style={{ padding: '14px 16px' }}>
-            {[['name', 'Boat Name'], ['motor_type', 'Motor'], ['model', 'Model'], ['licence', 'Licence / Reg'], ['trailer_licence', 'Trailer Licence'], ['length_ft', 'Length (ft)'], ['rate_type', 'Rate Type']].map(([key, label]) => (
-              <div key={key} className="field" style={{ marginBottom: 10 }}>
-                <label>{label}</label>
-                {key === 'rate_type' ? (
-                  <select value={boatForm[key] || 'SW'} onChange={(e) => setBoatForm({...boatForm, [key]: e.target.value})}>
-                    <option value="SW">SW</option><option value="DW">DW</option>
-                  </select>
-                ) : key === 'length_ft' ? (
-                  <input type="number" value={boatForm[key] || ''} onChange={(e) => setBoatForm({...boatForm, [key]: e.target.value})} />
-                ) : (
-                  <input value={boatForm[key] || ''} onChange={(e) => setBoatForm({...boatForm, [key]: e.target.value})} />
-                )}
-              </div>
-            ))}
-            <button className="btn btn-accent" onClick={saveBoatInfo}>Save Boat</button>
-          </div>
-        </div>
-      ) : (
-        <div className="card" style={{ margin: '0 12px 10px' }}>
-          <div className="card-pad">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px' }}>
-              {[['Motor', card.motor_type], ['Model', card.model], ['Licence', card.licence],
-                ['Trailer', card.trailer_licence], ['Length', card.length_ft ? `${card.length_ft} ft` : null], ['Rate', card.rate_type],
-              ].map(([l, v]) => v ? (
-              <div key={l}>
-                <div style={{ fontFamily: 'Barlow Condensed', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text3)', textTransform: 'uppercase' }}>{l}</div>
-                <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{v}</div>
-              </div>
-            ) : null)}
-          </div>
+      <div className="card" style={{ margin: '0 12px 10px' }}>
+        <div className="card-pad">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px' }}>
+            {[['Motor', card.motor_type], ['Model', card.model], ['Licence', card.licence],
+              ['Trailer', card.trailer_licence], ['Length', card.length_ft ? `${card.length_ft} ft` : null], ['Rate', card.rate_type],
+            ].map(([l, v]) => v ? (
+            <div key={l}>
+              <div style={{ fontFamily: 'Barlow Condensed', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text3)', textTransform: 'uppercase' }}>{l}</div>
+              <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{v}</div>
+            </div>
+          ) : null)}
         </div>
       </div>
-      )}
+      </div>
 
       <div className="section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
         <span>Service Info</span>
@@ -162,7 +112,7 @@ function InfoTab({ card, reload }) {
                 <button key={st.key} className={`chip ${form.storage_type === st.key ? 'on' : ''}`}
                   onClick={() => {
                     const newType = form.storage_type === st.key ? '' : st.key
-                    const upd = { ...form, storage_type: newType }
+                    const upd = { ...form, storage_type: newType, storage_building: '', storage_row: '', storage_col: '', boathouse_no: '', slip_no: '' }
                     if (newType === 'storage_building') { upd.wrap_required = false; upd.wrap_done = false }
                     setForm(upd)
                   }}>
@@ -173,38 +123,48 @@ function InfoTab({ card, reload }) {
 
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Location Details</label>
-              {(form.storage_type === 'customer_boathouse' || form.storage_type === 'marina_boathouse') && (
-                <input placeholder={form.storage_type === 'customer_boathouse' ? 'Customer boathouse name or #' : 'Marina boathouse name or #'} style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                  value={form.storage_location || ''} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
+              {(form.storage_type === 'marina_boathouse' || form.storage_type === 'customer_boathouse') && (
+                <div>
+                  <div className="row-2" style={{ marginBottom: 8 }}>
+                    <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                      value={form.boathouse_no} onChange={(e) => setForm({ ...form, boathouse_no: e.target.value })}>
+                      <option value="">Boathouse #</option>
+                      {Array.from({ length: BOATHOUSE_COUNT }, (_, i) => i + 1).map(n => <option key={n} value={n}>Boathouse {n}</option>)}
+                    </select>
+                    <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                      value={form.slip_no} onChange={(e) => setForm({ ...form, slip_no: e.target.value })}>
+                      <option value="">Slip #</option>
+                      {Array.from({ length: BOATHOUSE_SLIPS }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                </div>
               )}
               {form.storage_type === 'storage_building' && (
                 <div>
                   <div className="row-2" style={{ marginBottom: 8 }}>
-                    <input placeholder="Building #" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                      value={form.storage_building || ''} onChange={(e) => setForm({ ...form, storage_building: e.target.value })} />
                     <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                      value={form.storage_row || ''} onChange={(e) => setForm({ ...form, storage_row: e.target.value })}>
-                      <option value="">Row (A-Z)</option>
-                      {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(l => <option key={l} value={l}>{l}</option>)}
+                      value={form.storage_building} onChange={(e) => setForm({ ...form, storage_building: e.target.value })}>
+                      <option value="">Building</option>
+                      {BUILDING_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                      value={form.storage_row} onChange={(e) => setForm({ ...form, storage_row: e.target.value })}>
+                      <option value="">Row</option>
+                      {STORAGE_ROWS.map(n => <option key={n} value={n}>Row {n}</option>)}
                     </select>
                   </div>
                   <div className="row-2">
                     <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                      value={form.storage_col || ''} onChange={(e) => setForm({ ...form, storage_col: e.target.value })}>
+                      value={form.storage_col} onChange={(e) => setForm({ ...form, storage_col: e.target.value })}>
                       <option value="">Column</option>
-                      {Array.from({ length: 30 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                    <select style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                      value={form.storage_level || ''} onChange={(e) => setForm({ ...form, storage_level: e.target.value })}>
-                      <option value="">Level</option>
-                      {Array.from({ length: 5 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+                      {STORAGE_COLS.map(l => <option key={l} value={l}>Column {l}</option>)}
                     </select>
                   </div>
                 </div>
               )}
               {!['customer_boathouse', 'marina_boathouse', 'storage_building'].includes(form.storage_type) && form.storage_type && (
                 <input placeholder="Location notes (optional)" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                  value={form.storage_location || ''} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
+                  value={''} onChange={() => {}} />
               )}
               {!form.storage_type && <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', padding: '6px 0' }}>Select a storage type above to configure location</div>}
             </div>
@@ -312,7 +272,7 @@ function AuthorizedTab({ card, reload }) {
     if (!updated.find(w => w.service_type === key)) updated.push({ service_type: key, authorized: 1 })
     setWork(updated)
     try {
-      await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) })
+      await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed, products_used: (() => { try { return typeof w.products_used === 'string' ? JSON.parse(w.products_used) : (w.products_used || []) } catch { return [] } })() })) })
       reload()
     } catch (e) { showToast('Save failed'); reload() }
   }
@@ -325,7 +285,7 @@ function AuthorizedTab({ card, reload }) {
     const updated = [...work, { service_type: taskName, authorized: 1, completed: 0 }]
     setWork(updated); setCustomTask('')
     try {
-      await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed })) })
+      await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed, products_used: (() => { try { return typeof w.products_used === 'string' ? JSON.parse(w.products_used) : (w.products_used || []) } catch { return [] } })() })) })
       reload()
     } catch (e) { showToast('Save failed'); reload() }
   }
@@ -464,12 +424,12 @@ function ServiceWorkTab({ card, reload }) {
   return (
     <div>
       <div style={{ padding: '8px 16px 8px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>
-        Tap or slide to complete authorized service tasks
+        Tap to complete authorized service tasks
       </div>
       <div className="card" style={{ margin: '0 12px' }}>
         {[...AUTHORIZED_WORK.filter(w => authServiceItems.find(a => a.service_type === w.key)), ...customItems.map(w => ({ key: w.service_type, label: w.service_type }))].map((w, i, arr) => {
           const entry = work.find(x => x.service_type === w.key) || {}
-          const products = entry.products_used ? (typeof entry.products_used === 'string' ? JSON.parse(entry.products_used) : entry.products_used) : []
+          const products = (() => { try { const p = entry.products_used; if (Array.isArray(p)) return p; const parsed = typeof p === 'string' ? JSON.parse(p) : []; return Array.isArray(parsed) ? parsed : [] } catch { return [] } })()
           return (
             <div key={w.key}>
               <SwipeableTask key={w.key} label={w.label} authorized={true} completed={!!entry.completed}
@@ -477,7 +437,6 @@ function ServiceWorkTab({ card, reload }) {
                 completedAt={entry.completed_at ? entry.completed_at : null}
                 employeeName={entry.completed_by ? (card.work_logs || []).find(l => l.employee_id === entry.completed_by)?.employee_name || '' : ''}
                 isLast={i === arr.length - 1 && Object.keys(productInputs).length === 0}
-                onToggleAuth={() => toggle(w.key, 'completed')}
                 onComplete={() => {
                   if (!productInputs[w.key] || productInputs[w.key].length === 0) addProduct(w.key)
                   else toggle(w.key, 'completed')
@@ -591,7 +550,7 @@ function CleaningWorkTab({ card, reload }) {
   return (
     <div>
       <div style={{ padding: '8px 16px 8px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>
-        Tap or slide to complete authorized cleaning tasks
+        Tap to complete authorized cleaning tasks
       </div>
       {card.wrap_required && (
         <div style={{ margin: '0 12px 12px' }}>
@@ -599,7 +558,6 @@ function CleaningWorkTab({ card, reload }) {
           <div className="card" style={{ marginTop: 6 }}>
             <SwipeableTask label="Unwrap boat" authorized={true} completed={unwrapDone}
               isLast={allAuthCleaning.length === 0}
-              onToggleAuth={toggleUnwrap}
               onComplete={toggleUnwrap}
               onUncomplete={toggleUnwrap} />
           </div>
@@ -614,7 +572,7 @@ function CleaningWorkTab({ card, reload }) {
             <div className="card" style={{ marginTop: 6 }}>
               {groupItems.map((w, i) => {
                 const entry = work.find(x => x.service_type === w.key) || {}
-                const products = entry.products_used ? (typeof entry.products_used === 'string' ? JSON.parse(entry.products_used) : entry.products_used) : []
+                const products = (() => { try { const p = entry.products_used; if (Array.isArray(p)) return p; const parsed = typeof p === 'string' ? JSON.parse(p) : []; return Array.isArray(parsed) ? parsed : [] } catch { return [] } })()
                 return (
                   <div key={w.key}>
                     <SwipeableTask key={w.key} label={w.label} authorized={true} completed={!!entry.completed}
@@ -622,7 +580,6 @@ function CleaningWorkTab({ card, reload }) {
                       completedAt={entry.completed_at ? entry.completed_at : null}
                       employeeName={entry.completed_by ? (card.work_logs || []).find(l => l.employee_id === entry.completed_by)?.employee_name || '' : ''}
                       isLast={i === groupItems.length - 1 && Object.keys(productInputs).length === 0}
-                      onToggleAuth={() => toggle(w.key, 'completed')}
                       onComplete={() => {
                         if (!productInputs[w.key] || productInputs[w.key].length === 0) addProduct(w.key)
                         else toggle(w.key, 'completed')
@@ -686,7 +643,7 @@ function StorageTab({ card, reload }) {
   return (
     <div>
       <div style={{ padding: '8px 16px 8px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>
-        Complete storage tasks
+        Tap to complete storage tasks
       </div>
       <div className="card" style={{ margin: '0 12px' }}>
         {STORAGE_CHECKLIST.map((group) => {
@@ -699,7 +656,6 @@ function StorageTab({ card, reload }) {
                 return (
                   <SwipeableTask key={w.key} label={w.label} authorized={true} completed={done}
                     isLast={i === groupItems.length - 1}
-                    onToggleAuth={() => toggle(w.key)}
                     onComplete={() => toggle(w.key)}
                     onUncomplete={() => toggle(w.key)} />
                 )
@@ -910,7 +866,7 @@ function ChecklistTab({ card, reload, checklistType }) {
                         return (
                           <button key={r} onClick={() => setRating(item.key, rating === r ? '' : r)}
                             style={{
-                              padding: '5px 14px', borderRadius: 6, border: `1px solid ${colors[r]}`,
+                              padding: '5px 14px', borderRadius: 6, border: `1px solid ${rating === r ? colors[r] : 'var(--border)'}`,
                               background: rating === r ? colors[r] : 'transparent',
                               color: rating === r ? '#fff' : 'var(--text2)',
                               fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 12,

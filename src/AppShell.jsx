@@ -42,7 +42,7 @@ export default function AppShell() {
     switch (current.screen) {
       case 'cards': return <CardsScreen params={current.params} />
       case 'customers': return <CustomersScreen />
-      case 'boats': return <BoatsScreen />
+      case 'boats': return <BoatsScreen params={current.params} />
       case 'card': return <CardDetailScreen params={current.params} />
       case 'new-card': return <NewCardScreen params={current.params} />
       case 'new-log': return <NewLogScreen params={current.params} />
