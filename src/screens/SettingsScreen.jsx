@@ -4,6 +4,7 @@ import { AuthCtx } from '../contexts/AuthCtx'
 import { NavCtx } from '../contexts/NavCtx'
 import { THEMES, THEME_PREVIEW_COLORS, ROLE_COLORS } from '../constants'
 import Icon from '../components/Icon'
+import { getToken } from '../api'
 
 export default function SettingsScreen() {
   const { theme, darkMode, setTheme, setDarkMode } = useContext(ThemeCtx)
@@ -14,6 +15,18 @@ export default function SettingsScreen() {
   useEffect(() => {
     fetch('/api/version').then(r => r.json()).then(d => setVersion(d.version)).catch(() => {})
   }, [])
+
+  async function handleExport() {
+    const res = await fetch('/api/export', { headers: { Authorization: `Bearer ${getToken()}` } })
+    if (res.status === 401) {
+      localStorage.removeItem('marina_token'); localStorage.removeItem('marina_employee'); window.location.reload(); return
+    }
+    if (!res.ok) return alert('Export failed')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `marina-backup-${new Date().toISOString().split('T')[0]}.zip`; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div>
@@ -44,7 +57,7 @@ export default function SettingsScreen() {
         })}
       </div>
 
-      <div className="section-head">Account</div>
+      <div className="section-head">Profile</div>
       <div className="card" style={{ margin: '0 12px' }}>
         <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue', fontSize: 20, letterSpacing: 1, color: '#fff' }}>
@@ -55,26 +68,28 @@ export default function SettingsScreen() {
             <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: ROLE_COLORS[employee?.role] || 'var(--text3)', textTransform: 'uppercase' }}>{employee?.role}</div>
           </div>
         </div>
-        <div style={{ borderTop: '1px solid var(--border)' }} />
-        {employee?.role === 'admin' && (
+      </div>
+
+      {employee?.role === 'admin' && <div className="section-head">Administration</div>}
+      {employee?.role === 'admin' && (
+        <div className="card" style={{ margin: '0 12px' }}>
           <button onClick={() => navigate('admin')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
             <Icon name="user" size={18} color="var(--text2)" />
             <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Administration</span>
             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
           </button>
-        )}
-        {employee?.role === 'admin' && (
-          <a href="/api/export" download style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', textDecoration: 'none', borderBottom: '1px solid var(--border)' }}>
+          <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}>
             <Icon name="download" size={18} color="var(--text2)" />
             <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Export Database (ZIP)</span>
             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
-          </a>
-        )}
-        <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}>
-          <Icon name="anchor" size={18} color="var(--danger)" />
-          <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--danger)' }}>Sign Out</span>
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
+
+      <button onClick={logout} className="sign-out-btn">
+        <Icon name="anchor" size={18} color="var(--danger)" />
+        <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--danger)' }}>Sign Out</span>
+      </button>
 
       <div style={{ textAlign: 'center', padding: '24px 16px', fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.5 }}>
         MARINA MANAGER v{version} {'\u00B7'} CAMPBELL'S LANDING
