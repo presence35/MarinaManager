@@ -282,6 +282,46 @@ module.exports = async function createApp() {
     );
   `);
 
+  // Create service_item_templates table (admin-managed authorized items)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS service_item_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_key TEXT NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'service',
+      cleaning_cat TEXT,
+      sort_order INTEGER DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Seed default service_item_templates if empty
+  const templateCount = db.prepare('SELECT COUNT(*) as c FROM service_item_templates').get();
+  if (templateCount.c === 0) {
+    const ins = db.prepare('INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order) VALUES (?, ?, ?, ?, ?)');
+    const serviceItems = [
+      ['oil_change', 'Oil & Filter', 'service', null, 1],
+      ['outdrive_service', 'Outdrive Svc', 'service', null, 2],
+      ['tune_up', 'Tune-Up', 'service', null, 3],
+      ['lower_unit_drain', 'Lower Unit', 'service', null, 4],
+      ['prop_rebuild', 'Prop Rebuild', 'service', null, 5],
+      ['pickup', 'Pickup', 'service', null, 6],
+      ['delivery', 'Delivery', 'service', null, 7],
+    ];
+    const cleaningItems = [
+      ['int_quick_wipe', 'Quick Wipe', 'cleaning', 'Interior', 8],
+      ['int_power_wash', 'Power Wash', 'cleaning', 'Interior', 9],
+      ['int_spotless', 'Make It Shiny & Spotless', 'cleaning', 'Interior', 10],
+      ['ext_quick_wipe', 'Quick Wipe', 'cleaning', 'Exterior', 11],
+      ['ext_power_wash', 'Power Wash', 'cleaning', 'Exterior', 12],
+      ['ext_algae_wax', 'Algae Strip & Wax', 'cleaning', 'Exterior', 13],
+      ['ext_buff_polish', 'Buff / Polish', 'cleaning', 'Exterior', 14],
+    ];
+    [...serviceItems, ...cleaningItems].forEach(row => ins.run(...row));
+    console.log('  \u2713 Default service item templates seeded');
+  }
+
   // Seed default admin if none exist
   const empCount = db.prepare('SELECT COUNT(*) as c FROM employees').get();
   if (empCount.c === 0) {
@@ -576,8 +616,6 @@ module.exports = async function createApp() {
   });
 
   const RECEIVED_ITEMS = ['battery', 'keys', 'cover', 'paddles', 'life_jackets', 'cushions', 'gas_cans', 'tie_ropes', 'lights'];
-  const SERVICES = ['oil_change', 'outdrive_service', 'tune_up', 'lower_unit_drain', 'prop_rebuild', 'pickup', 'delivery'];
-  const CLEANING_SERVICES = ['int_quick_wipe', 'int_power_wash', 'int_spotless', 'ext_quick_wipe', 'ext_power_wash', 'ext_algae_wax', 'ext_buff_polish'];
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
   app.post('/api/cards', requireEditor, (req, res) => {
@@ -605,9 +643,9 @@ module.exports = async function createApp() {
     const cardId = r.lastInsertRowid;
     const ii = db.prepare('INSERT OR IGNORE INTO received_items (card_id, item) VALUES (?, ?)');
     RECEIVED_ITEMS.forEach(item => ii.run(cardId, item));
+    const activeTemplates = db.prepare("SELECT item_key FROM service_item_templates WHERE active = 1").all();
     const iw = db.prepare('INSERT OR IGNORE INTO authorized_work (card_id, service_type) VALUES (?, ?)');
-    SERVICES.forEach(s => iw.run(cardId, s));
-    CLEANING_SERVICES.forEach(s => iw.run(cardId, s));
+    activeTemplates.forEach(row => iw.run(cardId, row.item_key));
     const ic = db.prepare('INSERT OR IGNORE INTO condition_assessment (card_id, area) VALUES (?, ?)');
     CONDITIONS.forEach(a => ic.run(cardId, a));
     db.prepare('INSERT INTO status_history (card_id, to_status, employee_id) VALUES (?, ?, ?)').run(cardId, 'intake', req.employee.id);
@@ -678,6 +716,41 @@ module.exports = async function createApp() {
     (req.body.work || []).forEach(({ service_type, authorized, completed, notes, completed_by, completed_at, products_used }) =>
       upd.run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null, completed_by || null, completed_at || null,         (() => { try { const p = typeof products_used === 'string' ? JSON.parse(products_used) : (products_used || []); return Array.isArray(p) ? JSON.stringify(p) : '[]'; } catch { return '[]'; } })()));
     db.prepare('UPDATE service_cards SET updated_at=datetime("now") WHERE id=?').run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ─── AUTHORIZED ITEMS (SERVICE ITEM TEMPLATES) ───────────────────────────────
+  app.get('/api/authorized-items', requireAdmin, (req, res) => {
+    res.json(db.prepare('SELECT * FROM service_item_templates ORDER BY sort_order').all());
+  });
+
+  app.get('/api/authorized-items/active', requireAuth, (req, res) => {
+    res.json(db.prepare("SELECT * FROM service_item_templates WHERE active = 1 ORDER BY sort_order").all());
+  });
+
+  app.post('/api/authorized-items', requireAdmin, (req, res) => {
+    const { item_key, label, category, cleaning_cat, sort_order } = req.body;
+    if (!item_key || !label || !category) return res.status(400).json({ error: 'Key, label, and category required' });
+    if (!['service', 'cleaning'].includes(category)) return res.status(400).json({ error: 'Category must be service or cleaning' });
+    try {
+      const r = db.prepare('INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order) VALUES (?, ?, ?, ?, ?)')
+        .run(item_key, label, category, cleaning_cat || null, sort_order != null ? sort_order : 0);
+      res.json({ id: r.lastInsertRowid, item_key, label, category });
+    } catch (e) {
+      res.status(400).json({ error: 'Item key already exists' });
+    }
+  });
+
+  app.put('/api/authorized-items/:id', requireAdmin, (req, res) => {
+    const { label, category, cleaning_cat, sort_order, active } = req.body;
+    const updates = [];
+    const params = [];
+    if (label !== undefined) { updates.push('label = ?'); params.push(label); }
+    if (category !== undefined) { updates.push('category = ?'); params.push(category); }
+    if (cleaning_cat !== undefined) { updates.push('cleaning_cat = ?'); params.push(cleaning_cat); }
+    if (sort_order !== undefined) { updates.push('sort_order = ?'); params.push(sort_order); }
+    if (active !== undefined) { updates.push('active = ?'); params.push(active ? 1 : 0); }
+    if (updates.length) db.prepare(`UPDATE service_item_templates SET ${updates.join(', ')} WHERE id=?`).run(...params, req.params.id);
     res.json({ ok: true });
   });
 

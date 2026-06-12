@@ -17,6 +17,12 @@ export default function AdminScreen() {
   const [boats, setBoats] = useState([])
   const [assignBoatId, setAssignBoatId] = useState('')
   const [assignEmpId, setAssignEmpId] = useState('')
+  const [items, setItems] = useState([])
+  const [showNewItem, setShowNewItem] = useState(false)
+  const [newItem, setNewItem] = useState({ item_key: '', label: '', category: 'service', cleaning_cat: 'Interior', sort_order: 0 })
+  const [editingItemId, setEditingItemId] = useState(null)
+  const [editLabel, setEditLabel] = useState('')
+  const [editCleaningCat, setEditCleaningCat] = useState('')
 
   const reload = () => api('GET', '/employees').then(setEmployees).catch(() => {})
   useEffect(() => { reload() }, [])
@@ -28,6 +34,14 @@ export default function AdminScreen() {
 
   useEffect(() => {
     if (tab === 'assignments') loadAssignments()
+  }, [tab])
+
+  const loadItems = () => {
+    api('GET', '/authorized-items').then(setItems).catch(() => {})
+  }
+
+  useEffect(() => {
+    if (tab === 'authorized_items') loadItems()
   }, [tab])
 
   const createEmployee = async () => {
@@ -73,12 +87,59 @@ export default function AdminScreen() {
     } catch (e) { showToast('Failed') }
   }
 
+  const createItem = async () => {
+    if (!newItem.item_key || !newItem.label) { showToast('Key and label required'); return }
+    try {
+      await api('POST', '/authorized-items', {
+        item_key: newItem.item_key.trim().toLowerCase().replace(/\s+/g, '_'),
+        label: newItem.label.trim(),
+        category: newItem.category,
+        cleaning_cat: newItem.category === 'cleaning' ? newItem.cleaning_cat : null,
+        sort_order: items.length + 1,
+      })
+      showToast('Item created')
+      setNewItem({ item_key: '', label: '', category: 'service', cleaning_cat: 'Interior', sort_order: 0 })
+      setShowNewItem(false)
+      loadItems()
+    } catch (e) { showToast(e.message || 'Failed') }
+  }
+
+  const toggleItemActive = async (item) => {
+    try {
+      await api('PUT', `/authorized-items/${item.id}`, { active: !item.active })
+      showToast(item.active ? 'Item disabled' : 'Item enabled')
+      loadItems()
+    } catch (e) { showToast('Failed') }
+  }
+
+  const startEdit = (item) => {
+    setEditingItemId(item.id)
+    setEditLabel(item.label)
+    setEditCleaningCat(item.cleaning_cat || '')
+  }
+
+  const saveEdit = async (item) => {
+    if (!editLabel.trim()) { showToast('Label required'); return }
+    try {
+      const body = { label: editLabel.trim() }
+      if (item.category === 'cleaning') body.cleaning_cat = editCleaningCat
+      await api('PUT', `/authorized-items/${item.id}`, body)
+      showToast('Item updated')
+      setEditingItemId(null)
+      loadItems()
+    } catch (e) { showToast('Failed') }
+  }
+
+  const cancelEdit = () => {
+    setEditingItemId(null)
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, padding: '10px 12px' }}>
-        {['employees', 'assignments'].map((t) => (
-          <button key={t} className={`chip ${tab === t ? 'on' : ''}`} style={{ textTransform: 'capitalize' }} onClick={() => setTab(t)}>
-            {t === 'employees' ? '\u{1F464}' : '\u{1F4CB}'} {t}
+        {['employees', 'assignments', 'authorized_items'].map((t) => (
+          <button key={t} className={`chip ${tab === t ? 'on' : ''}`} style={{ textTransform: 'Capitalize' }} onClick={() => setTab(t)}>
+            {t === 'employees' ? '\u{1F464}' : t === 'assignments' ? '\u{1F4CB}' : '\u{1F4DD}'} {t === 'authorized_items' ? 'Items' : t}
           </button>
         ))}
       </div>
@@ -150,7 +211,7 @@ export default function AdminScreen() {
                 <select style={{ flex: 1, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
                   value={assignEmpId} onChange={(e) => setAssignEmpId(e.target.value)}>
                   <option value="">Select employee...</option>
-                  {employees.filter(e => e.active && (e.role === 'mechanic' || e.role === 'cleaner')).map(e =>
+                  {employees.filter(e => e.active && (e.role === 'mechanic' || e.role === 'cleaner' || e.role === 'admin')).map(e =>
                     <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
                   )}
                 </select>
@@ -178,6 +239,98 @@ export default function AdminScreen() {
               </div>
             ))}
           </div>
+        </>
+      )}
+
+      {tab === 'authorized_items' && (
+        <>
+          <div style={{ padding: '0 12px 8px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn btn-accent btn-sm" style={{ width: 'auto' }} onClick={() => setShowNewItem(!showNewItem)}>
+              {showNewItem ? '\u2715 Cancel' : '+ Add Item'}
+            </button>
+          </div>
+
+          {showNewItem && (
+            <div className="card" style={{ margin: '0 12px 12px' }}>
+              <div style={{ padding: '14px 16px' }}>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Key * (unique, lowercase_no_spaces)</label>
+                  <input type="text" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newItem.item_key} onChange={(e) => setNewItem({ ...newItem, item_key: e.target.value })} />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Label *</label>
+                  <input type="text" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newItem.label} onChange={(e) => setNewItem({ ...newItem, label: e.target.value })} />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Category</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['service', 'cleaning'].map((c) => (
+                      <button key={c} className={`chip ${newItem.category === c ? 'on' : ''}`} style={{ textTransform: 'Capitalize' }} onClick={() => setNewItem({ ...newItem, category: c })}>{c}</button>
+                    ))}
+                  </div>
+                </div>
+                {newItem.category === 'cleaning' && (
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Cleaning Group</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {['Interior', 'Exterior'].map((g) => (
+                        <button key={g} className={`chip ${newItem.cleaning_cat === g ? 'on' : ''}`} style={{ textTransform: 'Capitalize' }} onClick={() => setNewItem({ ...newItem, cleaning_cat: g })}>{g}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button className="btn btn-primary" onClick={createItem}>Create Item</button>
+              </div>
+            </div>
+          )}
+
+          {items.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)', fontFamily: 'Barlow Condensed', fontWeight: 600, fontSize: 13 }}>No items yet</div>
+          ) : (
+            <>
+              {['service', 'cleaning'].map(cat => {
+                const catItems = items.filter(i => i.category === cat)
+                if (catItems.length === 0) return null
+                return (
+                  <div key={cat}>
+                    <div className="section-head" style={{ textTransform: 'Capitalize' }}>{cat} Items</div>
+                    <div className="card" style={{ margin: '0 12px 12px' }}>
+                      {catItems.map((item, i) => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < catItems.length - 1 ? '1px solid var(--border)' : 'none', opacity: item.active ? 1 : 0.4 }}>
+                          <div style={{ flex: 1 }}>
+                            {editingItemId === item.id ? (
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <input type="text" style={{ flex: 1, minWidth: 120, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 10px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                                  value={editLabel} onChange={(e) => setEditLabel(e.target.value)} />
+                                {item.category === 'cleaning' && (
+                                  <select style={{ background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 10px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
+                                    value={editCleaningCat} onChange={(e) => setEditCleaningCat(e.target.value)}>
+                                    <option value="Interior">Interior</option>
+                                    <option value="Exterior">Exterior</option>
+                                  </select>
+                                )}
+                                <button className="btn btn-sm btn-primary" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={() => saveEdit(item)}>Save</button>
+                                <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={cancelEdit}>Cancel</button>
+                              </div>
+                            ) : (
+                              <div onClick={() => startEdit(item)} style={{ cursor: 'pointer' }}>
+                                <div style={{ fontFamily: 'Bebas Neue', fontSize: 15, letterSpacing: 0.5, color: item.active ? 'var(--text)' : 'var(--text3)' }}>{item.label}</div>
+                              </div>
+                            )}
+                          </div>
+                          <button onClick={() => toggleItemActive(item)} className={`chip btn-sm ${item.active ? 'on' : ''}`} style={{ textTransform: 'uppercase', width: 'auto', fontSize: 11, marginLeft: 8, flexShrink: 0 }}>
+                            {item.active ? 'ACTIVE' : 'DISABLED'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </>
       )}
     </div>

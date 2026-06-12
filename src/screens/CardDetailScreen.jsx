@@ -5,7 +5,7 @@ import { ToastCtx } from '../contexts/ToastCtx'
 import { api, getToken } from '../api'
 import {
   STATUS_CONFIG, STATUS_ORDER, RECEIVED_ITEMS, CONDITIONS,
-  AUTHORIZED_WORK, CLEANING_ITEMS, STORAGE_TYPES, STORAGE_CHECKLIST, FALL_CHECKLIST, SPRING_CHECKLIST,
+  STORAGE_TYPES, STORAGE_CHECKLIST, FALL_CHECKLIST, SPRING_CHECKLIST,
   BUILDING_NAMES, BOATHOUSE_COUNT, BOATHOUSE_SLIPS, STORAGE_ROWS, STORAGE_COLS,
 } from '../constants'
 import Icon from '../components/Icon'
@@ -169,7 +169,7 @@ function InfoTab({ card, reload }) {
               {!form.storage_type && <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', padding: '6px 0' }}>Select a storage type above to configure location</div>}
             </div>
 
-            {form.storage_type && form.storage_type !== 'storage_building' && (
+            {form.storage_type !== 'storage_building' && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <button className={`chip ${form.wrap_required ? 'on warn' : ''}`} onClick={() => setForm({ ...form, wrap_required: !form.wrap_required })}>
                   {'\u{1F381}'} Wrap Required
@@ -259,7 +259,7 @@ function InfoTab({ card, reload }) {
   )
 }
 
-function AuthorizedTab({ card, reload }) {
+function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups, cleanKeys, authSet }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
@@ -290,10 +290,9 @@ function AuthorizedTab({ card, reload }) {
     } catch (e) { showToast('Save failed'); reload() }
   }
 
-  const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)))
-  const serviceItems = work.filter(w => !cleanKeys.has(w.service_type))
-  const cleaningItems = work.filter(w => cleanKeys.has(w.service_type))
-  const customItems = work.filter(w => !new Set([...AUTHORIZED_WORK.map(w => w.key), ...cleanKeys]).has(w.service_type))
+  const sectionServiceItems = work.filter(w => !cleanKeys.has(w.service_type))
+  const sectionCleaningItems = work.filter(w => cleanKeys.has(w.service_type))
+  const customItems = work.filter(w => !authSet.has(w.service_type))
 
   return (
     <div>
@@ -312,14 +311,14 @@ function AuthorizedTab({ card, reload }) {
 
       <div style={{ padding: '12px 16px 6px', fontFamily: 'Barlow Condensed', fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>Service</div>
       <div className="card" style={{ margin: '6px 12px 12px' }}>
-        {AUTHORIZED_WORK.map((w, i) => {
-          const entry = serviceItems.find(x => x.service_type === w.key) || {}
+        {tmplService.map((t, i) => {
+          const entry = sectionServiceItems.find(x => x.service_type === t.item_key) || {}
           return (
-            <div key={w.key} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < AUTHORIZED_WORK.length - 1 ? '1px solid var(--border)' : 'none' }}>
-              <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${entry.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly ? 'default' : 'pointer', transition: 'all .2s', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.key)}>
+            <div key={t.item_key} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < tmplService.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${entry.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly ? 'default' : 'pointer', transition: 'all .2s', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(t.item_key)}>
                 <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: entry.authorized ? 20 : 2, transition: 'all .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
               </div>
-              <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: entry.authorized ? 'var(--text)' : 'var(--text3)' }}>{w.label}</div>
+              <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: entry.authorized ? 'var(--text)' : 'var(--text3)' }}>{t.label}</div>
             </div>
           )
         })}
@@ -331,16 +330,16 @@ function AuthorizedTab({ card, reload }) {
             <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: w.authorized ? 'var(--text)' : 'var(--text3)' }}>{w.service_type}</div>
           </div>
         ))}
-        {AUTHORIZED_WORK.length === 0 && customItems.length === 0 && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No service tasks</div>}
+        {tmplService.length === 0 && customItems.length === 0 && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No service tasks</div>}
       </div>
 
       <div style={{ padding: '12px 16px 6px', fontFamily: 'Barlow Condensed', fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>Cleaning</div>
-      {CLEANING_ITEMS.map((group) => (
+      {cleaningGroups.map((group) => (
         <div key={group.cat} style={{ margin: '0 12px 6px' }}>
           <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase', padding: '8px 4px 4px' }}>{group.cat}</div>
           <div className="card">
             {group.items.map((w, i) => {
-              const entry = cleaningItems.find(x => x.service_type === w.key) || {}
+              const entry = sectionCleaningItems.find(x => x.service_type === w.key) || {}
               return (
                 <div key={w.key} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < group.items.length - 1 ? '1px solid var(--border)' : 'none' }}>
                   <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${entry.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.key)}>
@@ -357,7 +356,7 @@ function AuthorizedTab({ card, reload }) {
   )
 }
 
-function ServiceWorkTab({ card, reload }) {
+function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroups, cleanKeys, authSet }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
@@ -413,9 +412,8 @@ function ServiceWorkTab({ card, reload }) {
     setProductInputs({ ...productInputs, [key]: input })
   }
 
-  const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)))
   const authServiceItems = work.filter(w => w.authorized && !cleanKeys.has(w.service_type))
-  const customItems = work.filter(w => w.authorized && !new Set([...AUTHORIZED_WORK.map(w => w.key), ...cleanKeys]).has(w.service_type))
+  const customItems = work.filter(w => w.authorized && !authSet.has(w.service_type))
 
   if (authServiceItems.length === 0 && customItems.length === 0) {
     return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)', fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 14 }}>No authorized service tasks. Go to the Authorized tab first.</div>
@@ -427,35 +425,35 @@ function ServiceWorkTab({ card, reload }) {
         Tap to complete authorized service tasks
       </div>
       <div className="card" style={{ margin: '0 12px' }}>
-        {[...AUTHORIZED_WORK.filter(w => authServiceItems.find(a => a.service_type === w.key)), ...customItems.map(w => ({ key: w.service_type, label: w.service_type }))].map((w, i, arr) => {
-          const entry = work.find(x => x.service_type === w.key) || {}
+        {[...tmplService.filter(t => authServiceItems.find(a => a.service_type === t.item_key)), ...customItems.map(w => ({ item_key: w.service_type, label: w.service_type }))].map((w, i, arr) => {
+          const entry = work.find(x => x.service_type === w.item_key) || {}
           const products = (() => { try { const p = entry.products_used; if (Array.isArray(p)) return p; const parsed = typeof p === 'string' ? JSON.parse(p) : []; return Array.isArray(parsed) ? parsed : [] } catch { return [] } })()
           return (
-            <div key={w.key}>
-              <SwipeableTask key={w.key} label={w.label} authorized={true} completed={!!entry.completed}
+            <div key={w.item_key}>
+              <SwipeableTask key={w.item_key} label={w.label} authorized={true} completed={!!entry.completed}
                 completedBy={entry.completed_by ? entry.completed_by : null}
                 completedAt={entry.completed_at ? entry.completed_at : null}
                 employeeName={entry.completed_by ? (card.work_logs || []).find(l => l.employee_id === entry.completed_by)?.employee_name || '' : ''}
                 isLast={i === arr.length - 1 && Object.keys(productInputs).length === 0}
                 onComplete={() => {
-                  if (!productInputs[w.key] || productInputs[w.key].length === 0) addProduct(w.key)
-                  else toggle(w.key, 'completed')
+                  if (!productInputs[w.item_key] || productInputs[w.item_key].length === 0) addProduct(w.item_key)
+                  else toggle(w.item_key, 'completed')
                 }}
-                onUncomplete={() => toggle(w.key, 'completed')} />
-              {!entry.completed && (productInputs[w.key] || []).length > 0 && (
+                onUncomplete={() => toggle(w.item_key, 'completed')} />
+              {!entry.completed && (productInputs[w.item_key] || []).length > 0 && (
                 <div style={{ padding: '8px 16px 12px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--surface2)' }}>
-                  {productInputs[w.key].map((p, pi) => (
+                  {productInputs[w.item_key].map((p, pi) => (
                     <div key={pi} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                       <input placeholder="Product name" style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
-                        value={p.description} onChange={(e) => updateProduct(w.key, pi, 'description', e.target.value)} />
+                        value={p.description} onChange={(e) => updateProduct(w.item_key, pi, 'description', e.target.value)} />
                       <input type="number" placeholder="Qty" style={{ width: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
-                        value={p.quantity} onChange={(e) => updateProduct(w.key, pi, 'quantity', Number(e.target.value))} />
-                      <button onClick={() => removeProduct(w.key, pi)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 4 }}>&times;</button>
+                        value={p.quantity} onChange={(e) => updateProduct(w.item_key, pi, 'quantity', Number(e.target.value))} />
+                      <button onClick={() => removeProduct(w.item_key, pi)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 4 }}>&times;</button>
                     </div>
                   ))}
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={() => addProduct(w.key)}>+ Add Product</button>
-                    <button className="btn btn-sm btn-accent" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={() => toggle(w.key, 'completed')}>Complete</button>
+                    <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={() => addProduct(w.item_key)}>+ Add Product</button>
+                    <button className="btn btn-sm btn-accent" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={() => toggle(w.item_key, 'completed')}>Complete</button>
                   </div>
                 </div>
               )}
@@ -474,7 +472,7 @@ function ServiceWorkTab({ card, reload }) {
   )
 }
 
-function CleaningWorkTab({ card, reload }) {
+function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
@@ -540,7 +538,6 @@ function CleaningWorkTab({ card, reload }) {
     setProductInputs({ ...productInputs, [key]: input })
   }
 
-  const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)))
   const allAuthCleaning = work.filter(w => w.authorized && cleanKeys.has(w.service_type))
 
   if (allAuthCleaning.length === 0 && !card.wrap_required) {
@@ -563,7 +560,7 @@ function CleaningWorkTab({ card, reload }) {
           </div>
         </div>
       )}
-      {CLEANING_ITEMS.map((group) => {
+      {cleaningGroups.map((group) => {
         const groupItems = group.items.filter(w => allAuthCleaning.find(a => a.service_type === w.key))
         if (groupItems.length === 0) return null
         return (
@@ -1205,12 +1202,29 @@ export default function CardDetailScreen({ params = {} }) {
   const [card, setCard] = useState(null)
   const [tab, setTab] = useState('info')
   const [saving, setSaving] = useState(false)
+  const [templates, setTemplates] = useState([])
 
   const reload = useCallback(() => {
     api('GET', `/cards/${params.id}`).then(setCard).catch(() => {})
   }, [params.id])
 
   useEffect(() => { reload() }, [reload])
+
+  useEffect(() => {
+    api('GET', '/authorized-items/active').then(setTemplates).catch(() => {})
+  }, [])
+
+  const serviceItems = templates.filter(t => t.category === 'service')
+  const cleaningTemplates = templates.filter(t => t.category === 'cleaning')
+  const cleaningGroups = cleaningTemplates.reduce((acc, t) => {
+    const cat = t.cleaning_cat || 'Other'
+    let group = acc.find(g => g.cat === cat)
+    if (!group) { group = { cat, items: [] }; acc.push(group) }
+    group.items.push({ key: t.item_key, label: t.label })
+    return acc
+  }, [])
+  const cleanKeys = new Set(cleaningTemplates.map(t => t.item_key))
+  const authSet = new Set(templates.map(t => t.item_key))
 
   const advanceStatus = async () => {
     const idx = STATUS_ORDER.indexOf(card.status)
@@ -1254,13 +1268,11 @@ export default function CardDetailScreen({ params = {} }) {
       return total > 0 ? total : null
     }
     if (key === 'service_work') {
-      const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)))
       const completed = (card.authorized_work || []).filter(w => w.completed && !cleanKeys.has(w.service_type))
       const total = (card.authorized_work || []).filter(w => w.authorized && !cleanKeys.has(w.service_type))
       return total.length > 0 ? `${completed.length}/${total.length}` : null
     }
     if (key === 'cleaning_work') {
-      const cleanKeys = new Set(CLEANING_ITEMS.flatMap(g => g.items.map(i => i.key)))
       const completed = (card.authorized_work || []).filter(w => w.completed && cleanKeys.has(w.service_type))
       const total = (card.authorized_work || []).filter(w => w.authorized && cleanKeys.has(w.service_type))
       return total.length > 0 ? `${completed.length}/${total.length}` : null
@@ -1428,10 +1440,10 @@ export default function CardDetailScreen({ params = {} }) {
       </div>
 
       {tab === 'info' && <InfoTab card={card} reload={reload} />}
-      {tab === 'authorized' && <AuthorizedTab card={card} reload={reload} />}
+      {tab === 'authorized' && <AuthorizedTab card={card} reload={reload} serviceItems={serviceItems} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} authSet={authSet} />}
       {tab === 'fall_checklist' && <ChecklistTab card={card} reload={reload} checklistType="fall" />}
-      {tab === 'service_work' && <ServiceWorkTab card={card} reload={reload} />}
-      {tab === 'cleaning_work' && <CleaningWorkTab card={card} reload={reload} />}
+      {tab === 'service_work' && <ServiceWorkTab card={card} reload={reload} serviceItems={serviceItems} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} authSet={authSet} />}
+      {tab === 'cleaning_work' && <CleaningWorkTab card={card} reload={reload} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} />}
       {tab === 'spring_checklist' && <ChecklistTab card={card} reload={reload} checklistType="spring" />}
       {tab === 'storage' && <StorageTab card={card} reload={reload} />}
       {tab === 'invoice' && <InvoiceTab card={card} reload={reload} />}

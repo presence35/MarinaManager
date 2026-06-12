@@ -59,7 +59,7 @@ export default function SettingsScreen() {
         {employee?.role === 'admin' && (
           <button onClick={() => navigate('admin')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
             <Icon name="user" size={18} color="var(--text2)" />
-            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Manage Employees</span>
+            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Administration</span>
             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
           </button>
         )}
