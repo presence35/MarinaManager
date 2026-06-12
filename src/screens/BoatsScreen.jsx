@@ -50,7 +50,7 @@ export default function BoatsScreen({ params }) {
       await api('PUT', `/boats/${editingBoat.id}`, editingBoat)
       showToast('Boat updated')
       setEditingBoat(null)
-      fetchBoats()
+      setBoats(boats.map(b => b.id === editingBoat.id ? { ...b, ...editingBoat } : b))
     } catch (e) { showToast('Failed to update boat') }
   }
 

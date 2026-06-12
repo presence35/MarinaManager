@@ -65,7 +65,7 @@ export default function AppShell() {
               className={`nav-item ${activeNav === item.key ? 'active' : ''}`}
               onClick={() => setScreenStack([{ screen: item.key, params: {} }])}
             >
-              <Icon name={item.icon} size={24} />
+              <span className="nav-item-icon"><Icon name={item.icon} size={24} /></span>
             </button>
           ))}
         </div>

@@ -49,11 +49,11 @@ export default function AdminScreen() {
     if (!/^\d{4}$/.test(newEmp.pin)) { showToast('PIN must be 4 digits'); return }
     setSaving(true)
     try {
-      await api('POST', '/employees', newEmp)
+      const emp = await api('POST', '/employees', newEmp)
       showToast('Employee created')
       setNewEmp({ name: '', role: 'mechanic', initials: '', pin: '' })
       setShowNew(false)
-      reload()
+      setEmployees([...employees, { id: emp.id, name: emp.name, role: emp.role, initials: newEmp.initials || newEmp.name.slice(0, 2).toUpperCase(), active: 1, created_at: new Date().toISOString() }])
     } catch (e) { showToast(e.message || 'Failed') }
     setSaving(false)
   }
@@ -64,17 +64,19 @@ export default function AdminScreen() {
     try {
       await api('PUT', `/employees/${emp.id}`, { active: !emp.active })
       showToast(emp.active ? 'Employee deactivated — PIN revoked' : 'Employee reactivated')
-      reload()
+      setEmployees(employees.map(e => e.id === emp.id ? { ...e, active: !e.active } : e))
     } catch (e) { showToast('Failed') }
   }
 
   const createAssignment = async () => {
     if (!assignBoatId || !assignEmpId) { showToast('Select boat and employee'); return }
     try {
-      await api('POST', '/assignments', { boat_id: parseInt(assignBoatId), employee_id: parseInt(assignEmpId) })
+      const r = await api('POST', '/assignments', { boat_id: parseInt(assignBoatId), employee_id: parseInt(assignEmpId) })
       showToast('Assigned')
       setAssignBoatId(''); setAssignEmpId('')
-      loadAssignments()
+      const boat = boats.find(b => b.id === parseInt(assignBoatId))
+      const emp = employees.find(e => e.id === parseInt(assignEmpId))
+      setAssignments([...assignments, { id: r.id, boat_id: parseInt(assignBoatId), employee_id: parseInt(assignEmpId), boat_name: boat?.name || '', customer_name: boat?.customer_name || '', employee_name: emp?.name || '', employee_initials: emp?.initials || '' }])
     } catch (e) { showToast('Failed') }
   }
 
@@ -83,7 +85,7 @@ export default function AdminScreen() {
     try {
       await api('DELETE', `/assignments/${id}`)
       showToast('Removed')
-      loadAssignments()
+      setAssignments(assignments.filter(a => a.id !== id))
     } catch (e) { showToast('Failed') }
   }
 
@@ -94,7 +96,7 @@ export default function AdminScreen() {
     if (!newItem.label) { showToast('Label required'); return }
     try {
       const key = labelToKey(newItem.label)
-      await api('POST', '/authorized-items', {
+      const created = await api('POST', '/authorized-items', {
         item_key: key,
         label: newItem.label.trim(),
         category: newItem.category,
@@ -104,14 +106,14 @@ export default function AdminScreen() {
       showToast('Item created')
       setNewItem({ item_key: '', label: '', category: 'service', cleaning_cat: 'Interior', sort_order: 0 })
       setShowNewItem(false)
-      loadItems()
+      setItems([...items, { id: created.id, item_key: key, label: newItem.label.trim(), category: newItem.category, cleaning_cat: newItem.category === 'cleaning' ? newItem.cleaning_cat : null, sort_order: items.length + 1, active: 1 }])
     } catch (e) { showToast(e.message || 'Failed') }
   }
 
   const toggleItemActive = async (item) => {
     try {
       await api('PUT', `/authorized-items/${item.id}`, { active: !item.active })
-      loadItems()
+      setItems(items.map(i => i.id === item.id ? { ...i, active: !i.active } : i))
     } catch (e) { showToast('Failed') }
   }
 
@@ -130,7 +132,7 @@ export default function AdminScreen() {
       await api('PUT', `/authorized-items/${item.id}`, body)
       showToast('Item updated')
       setEditingItemId(null)
-      loadItems()
+      setItems(items.map(i => i.id === item.id ? { ...i, label: editLabel.trim(), item_key: key, cleaning_cat: i.category === 'cleaning' ? editCleaningCat : i.cleaning_cat } : i))
     } catch (e) { showToast('Failed') }
   }
 

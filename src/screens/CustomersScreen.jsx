@@ -32,7 +32,7 @@ export default function CustomersScreen() {
     try {
       await api('PUT', `/customers/${c.id}`, { name, phone, email })
       showToast('Customer updated')
-      fetchCustomers()
+      setCustomers(customers.map(x => x.id === c.id ? { ...x, name, phone, email } : x))
     } catch (e) { showToast('Failed') }
   }
 
