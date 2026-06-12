@@ -87,11 +87,15 @@ export default function AdminScreen() {
     } catch (e) { showToast('Failed') }
   }
 
+  const labelToKey = (label) =>
+    label.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_').replace(/_+/g, '_') || ''
+
   const createItem = async () => {
-    if (!newItem.item_key || !newItem.label) { showToast('Key and label required'); return }
+    if (!newItem.label) { showToast('Label required'); return }
     try {
+      const key = labelToKey(newItem.label)
       await api('POST', '/authorized-items', {
-        item_key: newItem.item_key.trim().toLowerCase().replace(/\s+/g, '_'),
+        item_key: key,
         label: newItem.label.trim(),
         category: newItem.category,
         cleaning_cat: newItem.category === 'cleaning' ? newItem.cleaning_cat : null,
@@ -107,7 +111,6 @@ export default function AdminScreen() {
   const toggleItemActive = async (item) => {
     try {
       await api('PUT', `/authorized-items/${item.id}`, { active: !item.active })
-      showToast(item.active ? 'Item disabled' : 'Item enabled')
       loadItems()
     } catch (e) { showToast('Failed') }
   }
@@ -121,7 +124,8 @@ export default function AdminScreen() {
   const saveEdit = async (item) => {
     if (!editLabel.trim()) { showToast('Label required'); return }
     try {
-      const body = { label: editLabel.trim() }
+      const key = labelToKey(editLabel)
+      const body = { item_key: key, label: editLabel.trim() }
       if (item.category === 'cleaning') body.cleaning_cat = editCleaningCat
       await api('PUT', `/authorized-items/${item.id}`, body)
       showToast('Item updated')
@@ -253,11 +257,6 @@ export default function AdminScreen() {
           {showNewItem && (
             <div className="card" style={{ margin: '0 12px 12px' }}>
               <div style={{ padding: '14px 16px' }}>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Key * (unique, lowercase_no_spaces)</label>
-                  <input type="text" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                    value={newItem.item_key} onChange={(e) => setNewItem({ ...newItem, item_key: e.target.value })} />
-                </div>
                 <div style={{ marginBottom: 10 }}>
                   <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Label *</label>
                   <input type="text" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
