@@ -51,19 +51,6 @@ module.exports = async function createApp() {
     connectionLimit: 10,
   };
 
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  if (fs.existsSync(schemaPath)) {
-    const migrationConn = await mysql.createConnection({ ...dbConfig, multipleStatements: true });
-    try {
-      console.log('  Running schema.sql (IF NOT EXISTS)...');
-      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-      await migrationConn.query(schemaSql);
-      console.log('  Schema check complete');
-    } finally {
-      await migrationConn.end();
-    }
-  }
-
   const pool = mysql.createPool(dbConfig);
   const db = new MySQLDatabase(pool);
 
@@ -761,24 +748,6 @@ module.exports = async function createApp() {
   app.get('/api/version', (req, res) => {
     res.json({ version: require('./package.json').version });
   });
-
-  app.get('/api/debug/db', requireAdmin, asyncHandler(async (req, res) => {
-    const [tables] = await pool.query('SHOW TABLES');
-    const tableList = tables.map(t => Object.values(t)[0]);
-    const counts = {};
-    for (const table of tableList) {
-      const [rows] = await pool.query(`SELECT COUNT(*) as c FROM \`${table}\``);
-      counts[table] = rows[0].c;
-    }
-    res.json({
-      host: process.env.DB_HOST,
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      tables: tableList.length,
-      tableList,
-      rowCount: counts,
-    });
-  }));
 
   app.get('/api/public/card/:token', asyncHandler(async (req, res) => {
     const card = await db.prepare(`
