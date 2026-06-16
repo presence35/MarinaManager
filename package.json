@@ -1,6 +1,6 @@
 {
   "name": "marina-repair-app",
-  "version": "1.0.11",
+  "version": "1.1.0",
   "description": "Campbell's Landing Marina - Service & Storage Management",
   "main": "server.js",
   "scripts": {
@@ -18,8 +18,7 @@
     "mysql2": "^3.22.5",
     "qr-code-styling": "^1.9.2",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "sql.js": "^1.14.1"
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
