@@ -55,15 +55,10 @@ module.exports = async function createApp() {
   if (fs.existsSync(schemaPath)) {
     const migrationConn = await mysql.createConnection({ ...dbConfig, multipleStatements: true });
     try {
-      const [tables] = await migrationConn.query('SHOW TABLES');
-      if (tables.length === 0) {
-        console.log('  Running auto-migration from schema.sql...');
-        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-        await migrationConn.query(schemaSql);
-        console.log('  Auto-migration complete');
-      } else {
-        console.log(`  Found ${tables.length} existing tables, skipping migration`);
-      }
+      console.log('  Running schema.sql (IF NOT EXISTS)...');
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+      await migrationConn.query(schemaSql);
+      console.log('  Schema check complete');
     } finally {
       await migrationConn.end();
     }

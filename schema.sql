@@ -1,34 +1,12 @@
 -- ============================================================
 -- Campbell's Landing Marina - MySQL Schema & Seed Data
--- Import into GoDaddy via phpMyAdmin or MySQL CLI
+-- Auto-runs on startup. Safe to re-run (uses IF NOT EXISTS).
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ─── DROP EXISTING TABLES (safe re-import) ──────────────────
-DROP TABLE IF EXISTS status_history;
-DROP TABLE IF EXISTS checklist_completions;
-DROP TABLE IF EXISTS photos;
-DROP TABLE IF EXISTS parts_used;
-DROP TABLE IF EXISTS work_logs;
-DROP TABLE IF EXISTS condition_assessment;
-DROP TABLE IF EXISTS authorized_work;
-DROP TABLE IF EXISTS received_items;
-DROP TABLE IF EXISTS service_cards;
-DROP TABLE IF EXISTS boat_assignments;
-DROP TABLE IF EXISTS boats;
-DROP TABLE IF EXISTS customers;
-DROP TABLE IF EXISTS device_tokens;
-DROP TABLE IF EXISTS employees;
-DROP TABLE IF EXISTS products;
-DROP TABLE IF EXISTS invoice_items;
-DROP TABLE IF EXISTS service_item_templates;
-DROP TABLE IF EXISTS storage_locations;
-
-SET FOREIGN_KEY_CHECKS = 1;
-
 -- ─── EMPLOYEES ──────────────────────────────────────────────
-CREATE TABLE employees (
+CREATE TABLE IF NOT EXISTS employees (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   role VARCHAR(50) NOT NULL DEFAULT 'mechanic',
@@ -39,7 +17,7 @@ CREATE TABLE employees (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── DEVICE TOKENS ──────────────────────────────────────────
-CREATE TABLE device_tokens (
+CREATE TABLE IF NOT EXISTS device_tokens (
   token VARCHAR(255) PRIMARY KEY,
   employee_id INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -47,7 +25,7 @@ CREATE TABLE device_tokens (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── CUSTOMERS ──────────────────────────────────────────────
-CREATE TABLE customers (
+CREATE TABLE IF NOT EXISTS customers (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   address VARCHAR(255),
@@ -59,7 +37,7 @@ CREATE TABLE customers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── BOATS ──────────────────────────────────────────────────
-CREATE TABLE boats (
+CREATE TABLE IF NOT EXISTS boats (
   id INT AUTO_INCREMENT PRIMARY KEY,
   customer_id INT NOT NULL,
   name VARCHAR(255),
@@ -74,7 +52,7 @@ CREATE TABLE boats (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── SERVICE CARDS ──────────────────────────────────────────
-CREATE TABLE service_cards (
+CREATE TABLE IF NOT EXISTS service_cards (
   id INT AUTO_INCREMENT PRIMARY KEY,
   work_order_no VARCHAR(50),
   boat_id INT NOT NULL,
@@ -107,7 +85,7 @@ CREATE TABLE service_cards (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── RECEIVED ITEMS ─────────────────────────────────────────
-CREATE TABLE received_items (
+CREATE TABLE IF NOT EXISTS received_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   item VARCHAR(100) NOT NULL,
@@ -118,7 +96,7 @@ CREATE TABLE received_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── AUTHORIZED WORK ────────────────────────────────────────
-CREATE TABLE authorized_work (
+CREATE TABLE IF NOT EXISTS authorized_work (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   service_type VARCHAR(100) NOT NULL,
@@ -127,13 +105,13 @@ CREATE TABLE authorized_work (
   notes TEXT,
   completed_by INT REFERENCES employees(id),
   completed_at TIMESTAMP NULL,
-  products_used JSON DEFAULT '[]',
+  products_used JSON DEFAULT (JSON_ARRAY()),
   UNIQUE KEY uk_card_service (card_id, service_type),
   FOREIGN KEY (card_id) REFERENCES service_cards(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── CONDITION ASSESSMENT ───────────────────────────────────
-CREATE TABLE condition_assessment (
+CREATE TABLE IF NOT EXISTS condition_assessment (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   area VARCHAR(50) NOT NULL,
@@ -144,7 +122,7 @@ CREATE TABLE condition_assessment (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── WORK LOGS ──────────────────────────────────────────────
-CREATE TABLE work_logs (
+CREATE TABLE IF NOT EXISTS work_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   employee_id INT NOT NULL,
@@ -158,7 +136,7 @@ CREATE TABLE work_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── PARTS USED ─────────────────────────────────────────────
-CREATE TABLE parts_used (
+CREATE TABLE IF NOT EXISTS parts_used (
   id INT AUTO_INCREMENT PRIMARY KEY,
   work_log_id INT NOT NULL,
   part_number VARCHAR(100),
@@ -168,7 +146,7 @@ CREATE TABLE parts_used (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── PHOTOS ─────────────────────────────────────────────────
-CREATE TABLE photos (
+CREATE TABLE IF NOT EXISTS photos (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   work_log_id INT,
@@ -181,12 +159,12 @@ CREATE TABLE photos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── CHECKLIST COMPLETIONS ──────────────────────────────────
-CREATE TABLE checklist_completions (
+CREATE TABLE IF NOT EXISTS checklist_completions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   checklist_type VARCHAR(100) NOT NULL,
   employee_id INT NOT NULL,
-  items_json JSON DEFAULT '{}',
+  items_json JSON DEFAULT (JSON_OBJECT()),
   completed_at TIMESTAMP NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_card_checklist (card_id, checklist_type),
@@ -194,7 +172,7 @@ CREATE TABLE checklist_completions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── STATUS HISTORY ─────────────────────────────────────────
-CREATE TABLE status_history (
+CREATE TABLE IF NOT EXISTS status_history (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   from_status VARCHAR(50),
@@ -206,7 +184,7 @@ CREATE TABLE status_history (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── STORAGE LOCATIONS ──────────────────────────────────────
-CREATE TABLE storage_locations (
+CREATE TABLE IF NOT EXISTS storage_locations (
   id INT AUTO_INCREMENT PRIMARY KEY,
   facility_name VARCHAR(255) NOT NULL,
   facility_type VARCHAR(50) NOT NULL DEFAULT 'dry_land',
@@ -219,7 +197,7 @@ CREATE TABLE storage_locations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── BOAT ASSIGNMENTS ───────────────────────────────────────
-CREATE TABLE boat_assignments (
+CREATE TABLE IF NOT EXISTS boat_assignments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   boat_id INT NOT NULL,
   employee_id INT NOT NULL,
@@ -232,7 +210,7 @@ CREATE TABLE boat_assignments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── INVOICE ITEMS ──────────────────────────────────────────
-CREATE TABLE invoice_items (
+CREATE TABLE IF NOT EXISTS invoice_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   card_id INT NOT NULL,
   description VARCHAR(255) NOT NULL,
@@ -244,7 +222,7 @@ CREATE TABLE invoice_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── PRODUCTS ───────────────────────────────────────────────
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL UNIQUE,
   part_number VARCHAR(100),
@@ -256,7 +234,7 @@ CREATE TABLE products (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─── SERVICE ITEM TEMPLATES ─────────────────────────────────
-CREATE TABLE service_item_templates (
+CREATE TABLE IF NOT EXISTS service_item_templates (
   id INT AUTO_INCREMENT PRIMARY KEY,
   item_key VARCHAR(100) NOT NULL UNIQUE,
   label VARCHAR(255) NOT NULL,
@@ -268,20 +246,28 @@ CREATE TABLE service_item_templates (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+SET FOREIGN_KEY_CHECKS = 1;
+
 -- ============================================================
--- SEED DATA
+-- SEED DATA (safe to re-run — uses INSERT IGNORE)
 -- ============================================================
 
 -- Default admin (PIN: 0000, SHA-256 hash)
-INSERT INTO employees (name, role, initials, pin_hash) VALUES
-  ('Admin', 'admin', 'AD', '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0');
+INSERT IGNORE INTO employees (id, name, role, initials, pin_hash) VALUES
+  (1, 'Admin', 'admin', 'AD', '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0');
 
 -- Default customer, boat, and service card for testing
-INSERT INTO customers (name, phone, email) VALUES
-  ('John Doe', '555-0101', 'john@example.com');
+INSERT IGNORE INTO customers (id, name, phone, email) VALUES
+  (1, 'John Doe', '555-0101', 'john@example.com');
+
+INSERT IGNORE INTO boats (id, customer_id, name, motor_type, model, length_ft) VALUES
+  (1, 1, 'Sea Breeze', 'Yamaha 200', 'Sea Ray 240', 24);
+
+INSERT IGNORE INTO service_cards (id, boat_id, season_year, work_order_no) VALUES
+  (1, 1, YEAR(CURDATE()), 'WO-1000');
 
 -- Service item templates - Service
-INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order, unit_price) VALUES
+INSERT IGNORE INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order, unit_price) VALUES
   ('oil_change', 'Oil & Filter', 'service', NULL, 1, 0),
   ('outdrive_service', 'Outdrive Svc', 'service', NULL, 2, 0),
   ('tune_up', 'Tune-Up', 'service', NULL, 3, 0),
@@ -289,7 +275,7 @@ INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sor
   ('prop_rebuild', 'Prop Rebuild', 'service', NULL, 5, 0);
 
 -- Service item templates - Cleaning
-INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order, unit_price) VALUES
+INSERT IGNORE INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order, unit_price) VALUES
   ('int_quick_wipe', 'Quick Wipe', 'cleaning', 'Interior', 8, 0),
   ('int_power_wash', 'Power Wash', 'cleaning', 'Interior', 9, 0),
   ('int_spotless', 'Make It Shiny & Spotless', 'cleaning', 'Interior', 10, 0),
@@ -297,12 +283,3 @@ INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sor
   ('ext_power_wash', 'Power Wash', 'cleaning', 'Exterior', 12, 0),
   ('ext_algae_wax', 'Algae Strip & Wax', 'cleaning', 'Exterior', 13, 0),
   ('ext_buff_polish', 'Buff / Polish', 'cleaning', 'Exterior', 14, 0);
-
--- ============================================================
--- DATA MIGRATION PLACEHOLDER
--- ============================================================
--- After creating tables, import your existing data here.
--- Use a tool like sqlite3 CLI or DB Browser for SQLite to
--- export your marina.db as CSV/SQL, then paste INSERT
--- statements below or use a migration script.
--- ============================================================
