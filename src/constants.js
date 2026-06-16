@@ -44,8 +44,6 @@ export const AUTHORIZED_WORK = [
   { key: 'tune_up', label: 'Tune-Up' },
   { key: 'lower_unit_drain', label: 'Lower Unit' },
   { key: 'prop_rebuild', label: 'Prop Rebuild' },
-  { key: 'pickup', label: 'Pickup' },
-  { key: 'delivery', label: 'Delivery' },
 ]
 
 export const CONDITIONS = [

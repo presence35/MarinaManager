@@ -66,6 +66,13 @@ module.exports = async function createApp() {
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
 
+  function generateCustomerToken() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let token = '';
+    for (let i = 0; i < 8; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+    return token;
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS employees (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,6 +265,36 @@ module.exports = async function createApp() {
   try { db.exec("ALTER TABLE service_cards ADD COLUMN pickup_delivery TEXT DEFAULT NULL"); } catch(e) {}
   try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_customer_token ON service_cards(customer_token)"); } catch(e) {}
 
+  // One-time migration: backfill customer_token for existing cards
+  const cardsWithoutToken = db.prepare("SELECT id FROM service_cards WHERE customer_token IS NULL OR customer_token = ''").all();
+  if (cardsWithoutToken.length > 0) {
+    console.log(`  \u2713 Backfilling customer_token for ${cardsWithoutToken.length} existing card(s)...`);
+    const updateStmt = db.prepare('UPDATE service_cards SET customer_token = ? WHERE id = ?');
+    for (const card of cardsWithoutToken) {
+      let token = generateCustomerToken();
+      while (db.prepare('SELECT id FROM service_cards WHERE customer_token = ?').get(token)) {
+        token = generateCustomerToken();
+      }
+      updateStmt.run(token, card.id);
+    }
+    console.log('  \u2713 customer_token backfill complete');
+  }
+
+  // One-time migration: backfill work_order_no for existing cards
+  const cardsWithoutWO = db.prepare("SELECT id FROM service_cards WHERE work_order_no IS NULL OR work_order_no = ''").all();
+  if (cardsWithoutWO.length > 0) {
+    console.log(`  \u2713 Backfilling work_order_no for ${cardsWithoutWO.length} existing card(s)...`);
+    // Get the highest existing WO number to continue the sequence
+    const maxWO = db.prepare("SELECT MAX(CAST(REPLACE(work_order_no, 'WO-', '') AS INTEGER)) as maxNum FROM service_cards WHERE work_order_no LIKE 'WO-%'").get();
+    let nextNum = (maxWO && maxWO.maxNum) ? maxWO.maxNum + 1 : 1000;
+    const updateWO = db.prepare('UPDATE service_cards SET work_order_no = ? WHERE id = ?');
+    for (const card of cardsWithoutWO) {
+      updateWO.run('WO-' + nextNum, card.id);
+      nextNum++;
+    }
+    console.log('  \u2713 work_order_no backfill complete');
+  }
+
   // Migrate: add unit_price to service_item_templates
   try { db.exec("ALTER TABLE service_item_templates ADD COLUMN unit_price REAL DEFAULT 0"); } catch(e) {}
 
@@ -351,8 +388,6 @@ module.exports = async function createApp() {
       ['tune_up', 'Tune-Up', 'service', null, 3],
       ['lower_unit_drain', 'Lower Unit', 'service', null, 4],
       ['prop_rebuild', 'Prop Rebuild', 'service', null, 5],
-      ['pickup', 'Pickup', 'service', null, 6],
-      ['delivery', 'Delivery', 'service', null, 7],
     ];
     const cleaningItems = [
       ['int_quick_wipe', 'Quick Wipe', 'cleaning', 'Interior', 8],
@@ -662,13 +697,6 @@ module.exports = async function createApp() {
 
   const RECEIVED_ITEMS = ['battery', 'keys', 'cover', 'paddles', 'life_jackets', 'cushions', 'gas_cans', 'tie_ropes', 'lights'];
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
-
-  function generateCustomerToken() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let token = '';
-    for (let i = 0; i < 8; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
-    return token;
-  }
 
   app.post('/api/cards', requireEditor, (req, res) => {
     const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no } = req.body;

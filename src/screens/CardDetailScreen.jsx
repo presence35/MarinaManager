@@ -829,11 +829,11 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
     </div>
   )
 }
-
 function StorageTab({ card, reload }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const checklist = (card.checklists || []).find(c => c.checklist_type === 'storage')
+
   const items = useMemo(() => {
     try { return JSON.parse(checklist?.items_json || '{}') }
     catch { return {} }
@@ -849,32 +849,61 @@ function StorageTab({ card, reload }) {
     } catch (e) { showToast('Save failed') }
   }
 
-  if (allItems.length === 0) return null
+  const setPickupDelivery = async (value) => {
+    try {
+      await api('PUT', `/cards/${card.id}`, { pickup_delivery: value })
+      reload()
+    } catch (e) { showToast('Save failed') }
+  }
+
+  if (allItems.length === 0 && !card.pickup_delivery) return null
 
   return (
     <div>
       <div style={{ padding: '8px 16px 8px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>
-        Tap to complete storage tasks
+        Pickup / Delivery
       </div>
-      <div className="card" style={{ margin: '0 12px' }}>
-        {visibleGroups.map((group) => {
-          const groupItems = group.items
-          return (
-            <div key={group.cat}>
-              <div style={{ fontFamily: 'Barlow Condensed', fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase', padding: '14px 16px 6px', borderBottom: '1px solid var(--border)' }}>{group.cat}</div>
-              {groupItems.map((w, i) => {
-                const done = !!items[w.key]
-                return (
-                  <SwipeableTask key={w.key} label={w.label} authorized={true} completed={done}
-                    isLast={i === groupItems.length - 1}
-                    onComplete={() => toggle(w.key)}
-                    onUncomplete={() => toggle(w.key)} />
-                )
-              })}
-            </div>
-          )
-        })}
+      <div className="card" style={{ margin: '0 12px 12px' }}>
+        <div style={{ display: 'flex', gap: 8, padding: '12px 16px' }}>
+          {['pickup', 'delivery'].map((type) => {
+            const isActive = card.pickup_delivery === type
+            return (
+              <button key={type} className={`chip ${isActive ? 'on' : ''}`}
+                onClick={() => setPickupDelivery(isActive ? null : type)}
+                style={{ flex: 1, justifyContent: 'center', textTransform: 'capitalize' }}>
+                {type === 'pickup' ? '\u{1F464} ' : '\u{1F69A} '}{type}
+              </button>
+            )
+          })}
+        </div>
       </div>
+
+      {allItems.length > 0 && (
+        <>
+          <div style={{ padding: '8px 16px 8px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>
+            Tap to complete storage tasks
+          </div>
+          <div className="card" style={{ margin: '0 12px' }}>
+            {visibleGroups.map((group) => {
+              const groupItems = group.items
+              return (
+                <div key={group.cat}>
+                  <div style={{ fontFamily: 'Barlow Condensed', fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase', padding: '14px 16px 6px', borderBottom: '1px solid var(--border)' }}>{group.cat}</div>
+                  {groupItems.map((w, i) => {
+                    const done = !!items[w.key]
+                    return (
+                      <SwipeableTask key={w.key} label={w.label} authorized={true} completed={done}
+                        isLast={i === groupItems.length - 1}
+                        onComplete={() => toggle(w.key)}
+                        onUncomplete={() => toggle(w.key)} />
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }
