@@ -105,7 +105,6 @@ export default function CustomerViewScreen({ card: initialCard }) {
             ['Season', card.season_year],
             ['Storage', STORAGE_TYPES.find(s => s.key === card.storage_type)?.label || card.storage_type],
             ['Location', card.storage_location],
-            ['Shrink Wrap', card.wrap_required ? 'Required' : 'No'],
             ['Date In', card.date_in],
           ].filter(([, v]) => v).map(([l, v]) => (
             <div key={l} style={{ padding: '8px 12px', background: 'var(--surface)', borderRadius: 'var(--r)' }}>

@@ -4,6 +4,7 @@ import { AuthCtx } from '../contexts/AuthCtx'
 import { ToastCtx } from '../contexts/ToastCtx'
 import { api } from '../api'
 import Icon from '../components/Icon'
+import ProductAutocomplete from '../components/ProductAutocomplete'
 
 export default function NewLogScreen({ params = {} }) {
   const { goBack } = useContext(NavCtx)
@@ -44,7 +45,7 @@ export default function NewLogScreen({ params = {} }) {
     setTranscript('')
   }
 
-  const addPart = () => setParts((p) => [...p, { part_number: '', description: '', quantity: 1 }])
+  const addPart = () => setParts((p) => [...p, { product: null, quantity: 1 }])
   const updatePart = (i, field, val) => setParts((p) => p.map((x, j) => (j === i ? { ...x, [field]: val } : x)))
   const removePart = (i) => setParts((p) => p.filter((_, j) => j !== i))
 
@@ -55,7 +56,11 @@ export default function NewLogScreen({ params = {} }) {
       await api('POST', `/cards/${params.cardId}/logs`, {
         log_date: form.log_date,
         description: form.description || transcript,
-        parts: parts.filter((p) => p.description),
+        parts: parts.filter((p) => p.product).map(p => ({
+          part_number: p.product.part_number || null,
+          description: p.product.name,
+          quantity: p.quantity,
+        })),
       })
       showToast('Log entry saved')
       goBack()
@@ -96,10 +101,11 @@ export default function NewLogScreen({ params = {} }) {
       {parts.map((p, i) => (
         <div key={i} style={{ padding: '0 16px 10px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
-            <input placeholder="Part # (optional)" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none', marginBottom: 6 }}
-              value={p.part_number} onChange={(e) => updatePart(i, 'part_number', e.target.value)} />
-            <input placeholder="Description *" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
-              value={p.description} onChange={(e) => updatePart(i, 'description', e.target.value)} />
+            <ProductAutocomplete
+              value={p.product ? { id: p.product.id, name: p.product.name } : null}
+              onChange={(product) => updatePart(i, 'product', product)}
+              placeholder="Search or add product..."
+            />
           </div>
           <input type="number" min="0.1" step="0.1" style={{ width: 56, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 8px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none', textAlign: 'center' }}
             value={p.quantity} onChange={(e) => updatePart(i, 'quantity', e.target.value)} />

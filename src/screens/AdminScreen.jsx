@@ -24,6 +24,15 @@ export default function AdminScreen({ params = {} }) {
   const [editLabel, setEditLabel] = useState('')
   const [editCleaningCat, setEditCleaningCat] = useState('')
   const [editPrice, setEditPrice] = useState(0)
+  const [products, setProducts] = useState([])
+  const [showNewProduct, setShowNewProduct] = useState(false)
+  const [newProduct, setNewProduct] = useState({ name: '', part_number: '', unit: '', category: '', unit_price: 0 })
+  const [editingProductId, setEditingProductId] = useState(null)
+  const [editProductName, setEditProductName] = useState('')
+  const [editProductPartNo, setEditProductPartNo] = useState('')
+  const [editProductUnit, setEditProductUnit] = useState('')
+  const [editProductCategory, setEditProductCategory] = useState('')
+  const [editProductPrice, setEditProductPrice] = useState(0)
 
   const reload = () => api('GET', '/employees').then(setEmployees).catch(() => {})
   useEffect(() => { reload() }, [])
@@ -143,12 +152,73 @@ export default function AdminScreen({ params = {} }) {
     setEditingItemId(null)
   }
 
+  const loadProducts = () => {
+    api('GET', '/products').then(setProducts).catch(() => {})
+  }
+
+  useEffect(() => {
+    if (tab === 'products') loadProducts()
+  }, [tab])
+
+  const createProduct = async () => {
+    if (!newProduct.name.trim()) { showToast('Product name required'); return }
+    try {
+      const created = await api('POST', '/products', {
+        name: newProduct.name.trim(),
+        part_number: newProduct.part_number || null,
+        unit: newProduct.unit || null,
+        category: newProduct.category || null,
+        unit_price: newProduct.unit_price || 0,
+      })
+      showToast('Product created')
+      setNewProduct({ name: '', part_number: '', unit: '', category: '', unit_price: 0 })
+      setShowNewProduct(false)
+      setProducts([...products, { id: created.id, name: newProduct.name.trim(), part_number: newProduct.part_number || null, unit: newProduct.unit || null, category: newProduct.category || null, unit_price: newProduct.unit_price || 0, active: 1 }])
+    } catch (e) { showToast(e.message || 'Failed') }
+  }
+
+  const toggleProductActive = async (product) => {
+    try {
+      await api('PUT', `/products/${product.id}`, { active: !product.active })
+      setProducts(products.map(p => p.id === product.id ? { ...p, active: !p.active } : p))
+    } catch (e) { showToast('Failed') }
+  }
+
+  const startEditProduct = (product) => {
+    setEditingProductId(product.id)
+    setEditProductName(product.name)
+    setEditProductPartNo(product.part_number || '')
+    setEditProductUnit(product.unit || '')
+    setEditProductCategory(product.category || '')
+    setEditProductPrice(product.unit_price || 0)
+  }
+
+  const saveEditProduct = async (product) => {
+    if (!editProductName.trim()) { showToast('Name required'); return }
+    try {
+      await api('PUT', `/products/${product.id}`, {
+        name: editProductName.trim(),
+        part_number: editProductPartNo || null,
+        unit: editProductUnit || null,
+        category: editProductCategory || null,
+        unit_price: Number(editProductPrice) || 0,
+      })
+      showToast('Product updated')
+      setEditingProductId(null)
+      setProducts(products.map(p => p.id === product.id ? { ...p, name: editProductName.trim(), part_number: editProductPartNo || null, unit: editProductUnit || null, category: editProductCategory || null, unit_price: Number(editProductPrice) || 0 } : p))
+    } catch (e) { showToast('Failed') }
+  }
+
+  const cancelEditProduct = () => {
+    setEditingProductId(null)
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, padding: '10px 12px' }}>
-        {['employees', 'assignments', 'authorized_items'].map((t) => (
+        {['employees', 'assignments', 'authorized_items', 'products'].map((t) => (
           <button key={t} className={`chip ${tab === t ? 'on' : ''}`} style={{ textTransform: 'Capitalize' }} onClick={() => setTab(t)}>
-            {t === 'employees' ? '\u{1F464}' : t === 'assignments' ? '\u{1F4CB}' : '\u{1F4DD}'} {t === 'authorized_items' ? 'Items' : t}
+            {t === 'employees' ? '\u{1F464}' : t === 'assignments' ? '\u{1F4CB}' : t === 'authorized_items' ? '\u{1F4DD}' : '\u{1F4E6}'} {t === 'authorized_items' ? 'Items' : t}
           </button>
         ))}
       </div>
@@ -344,6 +414,90 @@ export default function AdminScreen({ params = {} }) {
                 )
               })}
             </>
+          )}
+        </>
+      )}
+
+      {tab === 'products' && (
+        <>
+          <div style={{ padding: '0 12px 8px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn btn-accent btn-sm" style={{ width: 'auto' }} onClick={() => setShowNewProduct(!showNewProduct)}>
+              {showNewProduct ? '\u2715 Cancel' : '+ Add Product'}
+            </button>
+          </div>
+
+          {showNewProduct && (
+            <div className="card" style={{ margin: '0 12px 12px' }}>
+              <div style={{ padding: '14px 16px' }}>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Name *</label>
+                  <input type="text" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Part #</label>
+                  <input type="text" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newProduct.part_number} onChange={(e) => setNewProduct({ ...newProduct, part_number: e.target.value })} />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</label>
+                  <input type="text" placeholder="e.g. each, litre, can" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newProduct.unit} onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })} />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Category</label>
+                  <input type="text" placeholder="e.g. Oil, Filter, Cleaner" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Default Price ($)</label>
+                  <input type="number" step="0.01" min="0" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newProduct.unit_price} onChange={(e) => setNewProduct({ ...newProduct, unit_price: Number(e.target.value) })} />
+                </div>
+                <button className="btn btn-primary" onClick={createProduct}>Create Product</button>
+              </div>
+            </div>
+          )}
+
+          {products.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)', fontFamily: 'Barlow Condensed', fontWeight: 600, fontSize: 13 }}>No products yet</div>
+          ) : (
+            <div className="card" style={{ margin: '0 12px 12px' }}>
+              {products.map((product, i) => (
+                <div key={product.id} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < products.length - 1 ? '1px solid var(--border)' : 'none', opacity: product.active ? 1 : 0.4 }}>
+                  <div style={{ flex: 1 }}>
+                    {editingProductId === product.id ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input type="text" placeholder="Name" style={{ flex: 1, minWidth: 120, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 10px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                          value={editProductName} onChange={(e) => setEditProductName(e.target.value)} />
+                        <input type="text" placeholder="Part #" style={{ width: 90, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 8px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
+                          value={editProductPartNo} onChange={(e) => setEditProductPartNo(e.target.value)} />
+                        <input type="text" placeholder="Unit" style={{ width: 60, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 8px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
+                          value={editProductUnit} onChange={(e) => setEditProductUnit(e.target.value)} />
+                        <input type="text" placeholder="Cat" style={{ width: 70, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 8px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
+                          value={editProductCategory} onChange={(e) => setEditProductCategory(e.target.value)} />
+                        <input type="number" step="0.01" min="0" placeholder="Price" style={{ width: 70, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 8px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
+                          value={editProductPrice} onChange={(e) => setEditProductPrice(Number(e.target.value))} />
+                        <button className="btn btn-sm btn-primary" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={() => saveEditProduct(product)}>Save</button>
+                        <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }} onClick={cancelEditProduct}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div onClick={() => startEditProduct(product)} style={{ cursor: 'pointer' }}>
+                        <div style={{ fontFamily: 'Bebas Neue', fontSize: 15, letterSpacing: 0.5, color: product.active ? 'var(--text)' : 'var(--text3)' }}>{product.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                          {[product.part_number, product.unit, product.category].filter(Boolean).join(' \u00B7 ')}
+                          {[product.part_number, product.unit, product.category].filter(Boolean).length > 0 && product.unit_price > 0 ? ' \u00B7 ' : ''}
+                          {product.unit_price > 0 ? `$${Number(product.unit_price).toFixed(2)}` : ''}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => toggleProductActive(product)} className={`chip btn-sm ${product.active ? 'on' : ''}`} style={{ textTransform: 'uppercase', width: 'auto', fontSize: 11, marginLeft: 8, flexShrink: 0 }}>
+                    {product.active ? 'ACTIVE' : 'DISABLED'}
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </>
       )}

@@ -70,9 +70,14 @@ export default function SettingsScreen() {
             <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Assignments</span>
             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
           </button>
-          <button onClick={() => navigate('admin', { tab: 'authorized_items' })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => navigate('admin', { tab: 'authorized_items' })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
             <Icon name="settings" size={18} color="var(--text2)" />
             <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Items</span>
+            <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
+          </button>
+          <button onClick={() => navigate('admin', { tab: 'products' })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <span style={{ width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', fontSize: 16 }}>{'\u{1F4E6}'}</span>
+            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Products</span>
             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
           </button>
         </div>

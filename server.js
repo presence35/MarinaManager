@@ -290,6 +290,43 @@ module.exports = async function createApp() {
     );
   `);
 
+  // Create products table (product catalog for autocomplete)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      part_number TEXT,
+      unit TEXT,
+      category TEXT,
+      unit_price REAL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Seed products from existing free-text entries if empty
+  const productCount = db.prepare('SELECT COUNT(*) as c FROM products').get();
+  if (productCount.c === 0) {
+    const seen = new Set();
+    const insert = db.prepare('INSERT OR IGNORE INTO products (name, active) VALUES (?, 1)');
+    // Extract from parts_used
+    const partsDescs = db.prepare('SELECT DISTINCT description FROM parts_used WHERE description IS NOT NULL AND description != \'\'').all();
+    partsDescs.forEach(r => { if (!seen.has(r.description)) { seen.add(r.description); try { insert.run(r.description); } catch(e) {} } });
+    // Extract from invoice_items
+    const invoiceDescs = db.prepare('SELECT DISTINCT description FROM invoice_items WHERE description IS NOT NULL AND description != \'\'').all();
+    invoiceDescs.forEach(r => { if (!seen.has(r.description)) { seen.add(r.description); try { insert.run(r.description); } catch(e) {} } });
+    // Extract from authorized_work products_used JSON
+    const workRows = db.prepare('SELECT products_used FROM authorized_work WHERE products_used IS NOT NULL').all();
+    workRows.forEach(r => {
+      try {
+        const arr = typeof r.products_used === 'string' ? JSON.parse(r.products_used) : [];
+        if (Array.isArray(arr)) arr.forEach(p => { if (p.description && !seen.has(p.description)) { seen.add(p.description); try { insert.run(p.description); } catch(e) {} } });
+      } catch(e) {}
+    });
+    const totalSeeded = seen.size;
+    if (totalSeeded > 0) console.log(`  \u2713 ${totalSeeded} products seeded from existing data`);
+  }
+
   // Create service_item_templates table (admin-managed authorized items)
   db.exec(`
     CREATE TABLE IF NOT EXISTS service_item_templates (
@@ -775,6 +812,51 @@ module.exports = async function createApp() {
     if (active !== undefined) { updates.push('active = ?'); params.push(active ? 1 : 0); }
     if (unit_price !== undefined) { updates.push('unit_price = ?'); params.push(unit_price); }
     if (updates.length) db.prepare(`UPDATE service_item_templates SET ${updates.join(', ')} WHERE id=?`).run(...params, req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ─── PRODUCTS ─────────────────────────────────────────────────────────────────
+  app.get('/api/products', requireAuth, (req, res) => {
+    const { q, active } = req.query;
+    if (q && q.length >= 1) {
+      res.json(db.prepare(`SELECT * FROM products WHERE (name LIKE ? OR part_number LIKE ?) AND active = 1 ORDER BY name LIMIT 20`).all(`%${q}%`, `%${q}%`));
+    } else if (active === 'true') {
+      res.json(db.prepare('SELECT * FROM products WHERE active = 1 ORDER BY name').all());
+    } else {
+      res.json(db.prepare('SELECT * FROM products ORDER BY name').all());
+    }
+  });
+
+  app.post('/api/products', requireAuth, (req, res) => {
+    const { name, part_number, unit, category, unit_price } = req.body;
+    if (!name) return res.status(400).json({ error: 'Product name required' });
+    try {
+      const r = db.prepare('INSERT INTO products (name, part_number, unit, category, unit_price) VALUES (?, ?, ?, ?, ?)').run(name, part_number || null, unit || null, category || null, unit_price || 0);
+      res.json({ id: r.lastInsertRowid, name });
+    } catch (e) {
+      const existing = db.prepare('SELECT id, name, active FROM products WHERE name = ?').get(name);
+      if (existing) {
+        if (!existing.active) {
+          db.prepare('UPDATE products SET active = 1 WHERE id = ?').run(existing.id);
+          return res.json({ id: existing.id, name: existing.name, restored: true });
+        }
+        return res.status(200).json({ id: existing.id, name: existing.name, exists: true });
+      }
+      res.status(400).json({ error: 'Failed to create product' });
+    }
+  });
+
+  app.put('/api/products/:id', requireAdmin, (req, res) => {
+    const { name, part_number, unit, category, unit_price, active } = req.body;
+    const updates = [];
+    const params = [];
+    if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+    if (part_number !== undefined) { updates.push('part_number = ?'); params.push(part_number); }
+    if (unit !== undefined) { updates.push('unit = ?'); params.push(unit); }
+    if (category !== undefined) { updates.push('category = ?'); params.push(category); }
+    if (unit_price !== undefined) { updates.push('unit_price = ?'); params.push(unit_price); }
+    if (active !== undefined) { updates.push('active = ?'); params.push(active ? 1 : 0); }
+    if (updates.length) db.prepare(`UPDATE products SET ${updates.join(', ')} WHERE id=?`).run(...params, req.params.id);
     res.json({ ok: true });
   });
 

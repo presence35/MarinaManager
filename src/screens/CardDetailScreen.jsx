@@ -13,6 +13,32 @@ import StatusBadge from '../components/StatusBadge'
 import ConditionRatingRow from '../components/ConditionRatingRow'
 import SwipeableTask from '../components/SwipeableTask'
 import QrCode from '../components/QrCode'
+import ProductAutocomplete from '../components/ProductAutocomplete'
+
+async function addWorkItemToInvoice(cardId, workItem, prefix, templates) {
+  const tmpl = (templates || []).find(t => t.item_key === workItem.service_type)
+  const price = tmpl?.unit_price || 0
+  const desc = `${prefix}: ${workItem.service_type}`
+  const invoiceRes = await api('GET', `/cards/${cardId}/invoice`).catch(() => ({ items: [] }))
+  const existingItems = invoiceRes.items || []
+  if (existingItems.some(i => i.description === desc)) return 0
+  const newItems = [{ description: desc, quantity: 1, unit_price: price }]
+  try {
+    const products = typeof workItem.products_used === 'string' ? JSON.parse(workItem.products_used) : (workItem.products_used || [])
+    if (Array.isArray(products) && products.length > 0) {
+      const catalog = await api('GET', '/products').catch(() => [])
+      const priceMap = {}
+      if (Array.isArray(catalog)) catalog.forEach(p => { priceMap[p.name?.toLowerCase()] = p.unit_price || 0 })
+      products.forEach(p => {
+        if (p.description) newItems.push({ description: p.description, quantity: p.quantity || 1, unit_price: priceMap[p.description.toLowerCase()] || 0 })
+      })
+    }
+  } catch (e) {}
+  if (newItems.length === 0) return 0
+  const allItems = [...existingItems, ...newItems]
+  await api('PUT', `/cards/${cardId}/invoice`, { items: allItems.map(i => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price })) })
+  return newItems.length
+}
 
 function InfoTab({ card, reload }) {
   const showToast = useContext(ToastCtx)
@@ -22,7 +48,6 @@ function InfoTab({ card, reload }) {
   const [form, setForm] = useState({
     work_order_no: card.work_order_no || '',
     storage_type: card.storage_type || '',
-    wrap_required: !!card.wrap_required,
     remarks: card.remarks || '',
     other_work: card.other_work || '',
     invoice_number: card.invoice_number || '',
@@ -125,7 +150,7 @@ function InfoTab({ card, reload }) {
                   onClick={() => {
                     const newType = form.storage_type === st.key ? '' : st.key
                     const upd = { ...form, storage_type: newType, storage_building: '', storage_row: '', storage_col: '', boathouse_no: '', slip_no: '' }
-                    if (newType === 'storage_building') { upd.wrap_required = false }
+
                     setForm(upd)
                   }}>
                   {st.icon} {st.label}
@@ -181,14 +206,6 @@ function InfoTab({ card, reload }) {
               {!form.storage_type && <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', padding: '6px 0' }}>Select a storage type above to configure location</div>}
             </div>
 
-            {form.storage_type !== 'storage_building' && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <button className={`chip ${form.wrap_required ? 'on warn' : ''}`} onClick={() => setForm({ ...form, wrap_required: !form.wrap_required })}>
-                  {'\u{1F381}'} Wrap Required
-                </button>
-              </div>
-            )}
-
             <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Other Work Requested</label>
             <textarea placeholder="Trim not working? Customer requests..." style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none', resize: 'vertical', minHeight: 60, marginBottom: 12 }}
               value={form.other_work} onChange={(e) => setForm({ ...form, other_work: e.target.value })} />
@@ -206,7 +223,6 @@ function InfoTab({ card, reload }) {
             {[['Work Order', card.work_order_no], ['Invoice #', card.invoice_number],
               ['Storage Type', STORAGE_TYPES.find((s) => s.key === card.storage_type)?.label],
               ['Location', card.storage_location],
-              ['Shrink Wrap', card.wrap_required ? 'Required' : 'No'],
               ['Pickup/Delivery', card.pickup_delivery ? card.pickup_delivery.charAt(0).toUpperCase() + card.pickup_delivery.slice(1) : '—'],
               ['Date In', card.date_in], ['Season', card.season_year],
             ].filter(([, v]) => v).map(([l, v]) => (
@@ -275,11 +291,11 @@ function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
   const [customTask, setCustomTask] = useState('')
-  const [deleteMode, setDeleteMode] = useState(false)
+
   const isReadOnly = employee?.role === 'mechanic' || employee?.role === 'wrapper' || employee?.role === 'cleaner'
 
   const toggleAuth = async (key) => {
-    if (isReadOnly || deleteMode) return
+    if (isReadOnly) return
     const updated = work.map((w) => w.service_type === key ? { ...w, authorized: w.authorized ? 0 : 1 } : w)
     if (!updated.find(w => w.service_type === key)) updated.push({ service_type: key, authorized: 1 })
     setWork(updated)
@@ -302,24 +318,9 @@ function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups
     } catch (e) { showToast('Save failed'); reload() }
   }
 
-  const deleteItem = async (key) => {
-    const updated = work.filter(w => w.service_type !== key)
-    setWork(updated)
-    try {
-      await api('PUT', `/cards/${card.id}/work`, { work: updated.map(w => ({ ...w, authorized: !!w.authorized, completed: !!w.completed, products_used: (() => { try { return typeof w.products_used === 'string' ? JSON.parse(w.products_used) : (w.products_used || []) } catch { return [] } })() })) })
-      reload()
-    } catch (e) { showToast('Save failed'); reload() }
-  }
-
   const sectionServiceItems = work.filter(w => !cleanKeys.has(w.service_type))
   const sectionCleaningItems = work.filter(w => cleanKeys.has(w.service_type))
   const customItems = work.filter(w => !authSet.has(w.service_type))
-
-  const renderDeleteIcon = (key) => deleteMode ? (
-    <button onClick={(e) => { e.stopPropagation(); deleteItem(key) }} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px 0 4px 8px', flexShrink: 0 }}>
-      <Icon name="trash" size={16} />
-    </button>
-  ) : null
 
   return (
     <div>
@@ -335,9 +336,6 @@ function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups
               style={{ flex: 1, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 6, padding: '10px 12px', fontSize: 15, color: 'var(--text)', outline: 'none' }} />
             <button type="submit" disabled={!customTask.trim()} style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, padding: '0 16px', fontFamily: 'Barlow Condensed', fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer' }}>Add</button>
           </form>
-          <button className={`chip ${deleteMode ? 'on danger' : ''}`} onClick={() => setDeleteMode(!deleteMode)} style={{ fontSize: 12 }}>
-            <Icon name="trash" size={14} /> {deleteMode ? 'Done Deleting' : 'Delete Items'}
-          </button>
         </div>
       )}
 
@@ -347,21 +345,19 @@ function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups
           const entry = sectionServiceItems.find(x => x.service_type === t.item_key) || {}
           return (
             <div key={t.item_key} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < tmplService.length - 1 - customItems.filter(w => !cleanKeys.has(w.service_type)).length ? '1px solid var(--border)' : 'none' }}>
-              <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${entry.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly || deleteMode ? 'default' : 'pointer', transition: 'all .2s', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(t.item_key)}>
+              <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${entry.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly ? 'default' : 'pointer', transition: 'all .2s', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(t.item_key)}>
                 <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: entry.authorized ? 20 : 2, transition: 'all .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
               </div>
               <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: entry.authorized ? 'var(--text)' : 'var(--text3)' }}>{t.label}</div>
-              {renderDeleteIcon(t.item_key)}
             </div>
           )
         })}
         {customItems.filter(w => !cleanKeys.has(w.service_type)).map((w, i) => (
           <div key={w.service_type} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < customItems.filter(x => !cleanKeys.has(x.service_type)).length - 1 ? '1px solid var(--border)' : 'none' }}>
-            <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: w.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${w.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly || deleteMode ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.service_type)}>
+            <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: w.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${w.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.service_type)}>
               <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: w.authorized ? 20 : 2, transition: 'all .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
             </div>
             <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: w.authorized ? 'var(--text)' : 'var(--text3)' }}>{w.service_type}</div>
-            {renderDeleteIcon(w.service_type)}
           </div>
         ))}
         {tmplService.length === 0 && customItems.length === 0 && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No service tasks</div>}
@@ -376,11 +372,10 @@ function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups
               const entry = sectionCleaningItems.find(x => x.service_type === w.key) || {}
               return (
                 <div key={w.key} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i < group.items.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                  <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${entry.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly || deleteMode ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.key)}>
+                  <div style={{ width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginRight: 12, background: entry.authorized ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${entry.authorized ? 'var(--accent)' : 'var(--border)'}`, position: 'relative', cursor: isReadOnly ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }} onClick={() => toggleAuth(w.key)}>
                     <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: entry.authorized ? 20 : 2, transition: 'all .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
                   </div>
                   <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: entry.authorized ? 'var(--text)' : 'var(--text3)' }}>{w.label}</div>
-                  {renderDeleteIcon(w.key)}
                 </div>
               )
             })}
@@ -405,12 +400,19 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
       if (w.service_type !== key) return w
       if (field === 'completed') {
         const becomingComplete = !w.completed
+        const toProductsArray = (inputs) => {
+          if (!inputs) return []
+          try {
+            if (Array.isArray(inputs)) return inputs.map(p => ({ description: p.product ? p.product.name : (p.description || ''), quantity: p.quantity || 1 }))
+            return typeof inputs === 'string' ? JSON.parse(inputs) : []
+          } catch { return [] }
+        }
         return {
           ...w,
           completed: becomingComplete ? 1 : 0,
           completed_by: becomingComplete ? employee.id : null,
           completed_at: becomingComplete ? now : null,
-          products_used: becomingComplete ? (productInputs[key] ? JSON.stringify(productInputs[key]) : '[]') : w.products_used,
+          products_used: becomingComplete ? JSON.stringify(toProductsArray(productInputs[key])) : w.products_used,
         }
       }
       return { ...w, [field]: w[field] ? 0 : 1 }
@@ -430,6 +432,14 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
         }))
       })
       setProductInputs({})
+      if (field === 'completed') {
+        const justCompleted = updated.find(w => w.service_type === key && w.completed)
+        if (justCompleted) {
+          addWorkItemToInvoice(card.id, justCompleted, 'Service', tmplService)
+            .then(count => { if (count > 0) showToast(`Added "${justCompleted.service_type}" to invoice`) })
+            .catch(() => {})
+        }
+      }
       reload()
     } catch (e) { showToast('Save failed'); reload() }
   }
@@ -453,7 +463,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
 
   const addProduct = (key) => {
     const input = productInputs[key] || []
-    setProductInputs({ ...productInputs, [key]: [...input, { description: '', quantity: 1 }] })
+    setProductInputs({ ...productInputs, [key]: [...input, { product: null, quantity: 1 }] })
   }
 
   const updateProduct = (key, idx, field, value) => {
@@ -491,6 +501,9 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
     if (completedItems.length === 0) { showToast('No completed items to add'); return }
     const invoiceRes = await api('GET', `/cards/${card.id}/invoice`).catch(() => ({ items: [] }))
     const existingItems = invoiceRes.items || []
+    const catalog = await api('GET', '/products').catch(() => [])
+    const priceMap = {}
+    if (Array.isArray(catalog)) catalog.forEach(p => { priceMap[p.name?.toLowerCase()] = p.unit_price || 0 })
     const newItems = []
     completedItems.forEach(w => {
       const tmpl = tmplService.find(t => t.item_key === w.service_type)
@@ -500,7 +513,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
         const products = typeof w.products_used === 'string' ? JSON.parse(w.products_used) : (w.products_used || [])
         if (Array.isArray(products)) {
           products.forEach(p => {
-            if (p.description) newItems.push({ description: p.description, quantity: p.quantity || 1, unit_price: 0 })
+            if (p.description) newItems.push({ description: p.description, quantity: p.quantity || 1, unit_price: priceMap[p.description.toLowerCase()] || 0 })
           })
         }
       } catch (e) {}
@@ -554,8 +567,14 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
                 <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
                   {productInputs[w.item_key].map((p, pi) => (
                     <div key={pi} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                      <input placeholder="Product name" style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
-                        value={p.description} onChange={(e) => updateProduct(w.item_key, pi, 'description', e.target.value)} />
+                      <div style={{ flex: 1 }}>
+                        <ProductAutocomplete
+                          value={p.product ? { id: p.product.id, name: p.product.name } : null}
+                          onChange={(product) => updateProduct(w.item_key, pi, 'product', product)}
+                          placeholder="Search or add product..."
+                          inputStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 13 }}
+                        />
+                      </div>
                       <input type="number" placeholder="Qty" style={{ width: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
                         value={p.quantity} onChange={(e) => updateProduct(w.item_key, pi, 'quantity', Number(e.target.value))} />
                       <button onClick={() => removeProduct(w.item_key, pi)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 4 }}>&times;</button>
@@ -567,7 +586,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
                   </div>
                 </div>
               )}
-              {entry.completed && products.length > 0 && (
+              {!!entry.completed && products.length > 0 && (
                 <div style={{ padding: '4px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   {products.map((p, pi) => p.description ? (
                     <span key={pi} className="part-tag">{p.description} &times; {p.quantity}</span>
@@ -628,6 +647,9 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
     if (completedItems.length === 0) { showToast('No completed items to add'); return }
     const invoiceRes = await api('GET', `/cards/${card.id}/invoice`).catch(() => ({ items: [] }))
     const existingItems = invoiceRes.items || []
+    const catalog = await api('GET', '/products').catch(() => [])
+    const priceMap = {}
+    if (Array.isArray(catalog)) catalog.forEach(p => { priceMap[p.name?.toLowerCase()] = p.unit_price || 0 })
     const newItems = []
     completedItems.forEach(w => {
       const tmpl = (templates || []).find(t => t.item_key === w.service_type)
@@ -637,7 +659,7 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
         const products = typeof w.products_used === 'string' ? JSON.parse(w.products_used) : (w.products_used || [])
         if (Array.isArray(products)) {
           products.forEach(p => {
-            if (p.description) newItems.push({ description: p.description, quantity: p.quantity || 1, unit_price: 0 })
+            if (p.description) newItems.push({ description: p.description, quantity: p.quantity || 1, unit_price: priceMap[p.description.toLowerCase()] || 0 })
           })
         }
       } catch (e) {}
@@ -657,12 +679,19 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
       if (w.service_type !== key) return w
       if (field === 'completed') {
         const becomingComplete = !w.completed
+        const toProductsArray = (inputs) => {
+          if (!inputs) return []
+          try {
+            if (Array.isArray(inputs)) return inputs.map(p => ({ description: p.product ? p.product.name : (p.description || ''), quantity: p.quantity || 1 }))
+            return typeof inputs === 'string' ? JSON.parse(inputs) : []
+          } catch { return [] }
+        }
         return {
           ...w,
           completed: becomingComplete ? 1 : 0,
           completed_by: becomingComplete ? employee.id : null,
           completed_at: becomingComplete ? now : null,
-          products_used: becomingComplete ? (productInputs[key] ? JSON.stringify(productInputs[key]) : '[]') : w.products_used,
+          products_used: becomingComplete ? JSON.stringify(toProductsArray(productInputs[key])) : w.products_used,
         }
       }
       return { ...w, [field]: w[field] ? 0 : 1 }
@@ -680,13 +709,21 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
         }))
       })
       setProductInputs({})
+      if (field === 'completed') {
+        const justCompleted = updated.find(w => w.service_type === key && w.completed)
+        if (justCompleted) {
+          addWorkItemToInvoice(card.id, justCompleted, 'Cleaning', templates)
+            .then(count => { if (count > 0) showToast(`Added "${justCompleted.service_type}" to invoice`) })
+            .catch(() => {})
+        }
+      }
       reload()
     } catch (e) { showToast('Save failed'); reload() }
   }
 
   const addProduct = (key) => {
     const input = productInputs[key] || []
-    setProductInputs({ ...productInputs, [key]: [...input, { description: '', quantity: 1 }] })
+    setProductInputs({ ...productInputs, [key]: [...input, { product: null, quantity: 1 }] })
   }
 
   const updateProduct = (key, idx, field, value) => {
@@ -756,8 +793,14 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
                       <div style={{ padding: '8px 16px 12px', borderBottom: i < groupItems.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--surface2)' }}>
                         {productInputs[w.key].map((p, pi) => (
                           <div key={pi} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                            <input placeholder="Product name" style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
-                              value={p.description} onChange={(e) => updateProduct(w.key, pi, 'description', e.target.value)} />
+                            <div style={{ flex: 1 }}>
+                              <ProductAutocomplete
+                                value={p.product ? { id: p.product.id, name: p.product.name } : null}
+                                onChange={(product) => updateProduct(w.key, pi, 'product', product)}
+                                placeholder="Search or add product..."
+                                inputStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 13 }}
+                              />
+                            </div>
                             <input type="number" placeholder="Qty" style={{ width: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
                               value={p.quantity} onChange={(e) => updateProduct(w.key, pi, 'quantity', Number(e.target.value))} />
                             <button onClick={() => removeProduct(w.key, pi)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 4 }}>&times;</button>
@@ -769,7 +812,7 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
                         </div>
                       </div>
                     )}
-                    {entry.completed && products.length > 0 && (
+                    {!!entry.completed && products.length > 0 && (
                       <div style={{ padding: '4px 16px 8px', borderBottom: i < groupItems.length - 1 ? '1px solid var(--border)' : 'none', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         {products.map((p, pi) => p.description ? (
                           <span key={pi} className="part-tag">{p.description} &times; {p.quantity}</span>
@@ -795,7 +838,8 @@ function StorageTab({ card, reload }) {
     try { return JSON.parse(checklist?.items_json || '{}') }
     catch { return {} }
   }, [checklist])
-  const allItems = STORAGE_CHECKLIST.flatMap(cat => cat.items)
+  const visibleGroups = STORAGE_CHECKLIST.filter(g => g.cat !== 'Wrapping' || card.wrap_required)
+  const allItems = visibleGroups.flatMap(cat => cat.items)
 
   const toggle = async (key) => {
     const updated = { ...items, [key]: items[key] ? false : true }
@@ -805,8 +849,6 @@ function StorageTab({ card, reload }) {
     } catch (e) { showToast('Save failed') }
   }
 
-  const isEditor = employee?.role === 'admin' || employee?.role === 'office'
-
   if (allItems.length === 0) return null
 
   return (
@@ -815,7 +857,7 @@ function StorageTab({ card, reload }) {
         Tap to complete storage tasks
       </div>
       <div className="card" style={{ margin: '0 12px' }}>
-        {STORAGE_CHECKLIST.map((group) => {
+        {visibleGroups.map((group) => {
           const groupItems = group.items
           return (
             <div key={group.cat}>
@@ -1157,7 +1199,7 @@ function InvoiceTab({ card, reload }) {
 
   useEffect(() => {
     api('GET', `/cards/${card.id}/invoice`).then(data => {
-      setItems(data.items || [])
+      setItems((data.items || []).map(i => ({ ...i, product: null })))
       setInvoiceStatus(data.invoice_status || 'draft')
       setInvoiceNumber(data.invoice_number || '')
       setTaxRate(data.tax_rate || 13)
@@ -1166,12 +1208,15 @@ function InvoiceTab({ card, reload }) {
   }, [card.id])
 
   const addItem = () => {
-    setItems([...items, { description: '', quantity: 1, unit_price: 0, total: 0 }])
+    setItems([...items, { description: '', quantity: 1, unit_price: 0, total: 0, product: null }])
   }
 
   const updateItem = (idx, field, value) => {
     const updated = items.map((item, i) => {
       if (i !== idx) return item
+      if (field === 'product' && value) {
+        return { ...item, product: value, description: value.name, unit_price: value.unit_price || 0, total: (item.quantity || 1) * (value.unit_price || 0) }
+      }
       const newItem = { ...item, [field]: value }
       if (field === 'quantity' || field === 'unit_price') {
         newItem.total = (field === 'quantity' ? value : item.quantity) * (field === 'unit_price' ? value : item.unit_price)
@@ -1317,12 +1362,21 @@ function InvoiceTab({ card, reload }) {
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)', fontFamily: 'Barlow Condensed', fontWeight: 600, fontSize: 13 }}>No invoice items — add items above</div>
         ) : items.map((item, i) => (
           <div key={i} style={{ padding: '10px 16px', borderBottom: i < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
-              <input style={{ flex: 1, background: isEditable ? 'var(--surface2)' : 'transparent', border: isEditable ? '1.5px solid var(--border)' : 'none', borderRadius: 6, padding: '8px 10px', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                placeholder="Description" value={item.description || ''}
-                onChange={(e) => updateItem(i, 'description', e.target.value)} disabled={!isEditable} />
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 4 }}>
+              <div style={{ flex: 1 }}>
+                {isEditable ? (
+                  <ProductAutocomplete
+                    value={item.product ? { id: item.product.id, name: item.product.name } : null}
+                    onChange={(product) => updateItem(i, 'product', product)}
+                    placeholder="Search or add product..."
+                    inputStyle={{ background: 'var(--surface2)', border: '1.5px solid var(--border)', fontSize: 14 }}
+                  />
+                ) : (
+                  <div style={{ padding: '8px 10px', fontSize: 14, color: 'var(--text)' }}>{item.description || ''}</div>
+                )}
+              </div>
               {isEditable && (
-                <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 4 }}>&times;</button>
+                <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 4, marginTop: 4 }}>&times;</button>
               )}
             </div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
