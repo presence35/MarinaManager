@@ -4,11 +4,27 @@ import { AuthCtx, AuthProvider } from './contexts/AuthCtx'
 import { ToastProvider } from './contexts/ToastCtx'
 import { api, getToken } from './api'
 import LoginScreen from './screens/LoginScreen'
+import CustomerViewScreen from './screens/CustomerViewScreen'
 import AppShell from './AppShell'
 
 function App() {
   const { employee, login } = useContext(AuthCtx)
   const [installPrompt, setInstallPrompt] = useState(null)
+  const [customerCard, setCustomerCard] = useState(null)
+  const [customerLoading, setCustomerLoading] = useState(true)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const wo = params.get('wo')
+    if (wo) {
+      fetch(`/api/public/card/${encodeURIComponent(wo)}`)
+        .then(r => { if (!r.ok) throw new Error('Not found'); return r.json() })
+        .then(data => { setCustomerCard(data); setCustomerLoading(false) })
+        .catch(() => { setCustomerCard('error'); setCustomerLoading(false) })
+    } else {
+      setCustomerLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     const handler = (e) => {
@@ -34,6 +50,9 @@ function App() {
     }
   }, [])
 
+  if (customerLoading) return null
+  if (customerCard === 'error') return <CustomerViewScreen />
+  if (customerCard) return <CustomerViewScreen card={customerCard} />
   if (!employee) return <LoginScreen onLogin={login} />
   return <AppShell />
 }

@@ -48,7 +48,7 @@ export default function AppShell() {
       case 'new-log': return <NewLogScreen params={current.params} />
       case 'map': return <MapScreen />
       case 'settings': return <SettingsScreen />
-      case 'admin': return <AdminScreen />
+      case 'admin': return <AdminScreen params={current.params} />
       case 'customer-detail': return <CustomerDetailScreen params={current.params} />
       default: return <CardsScreen />
     }

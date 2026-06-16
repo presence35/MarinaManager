@@ -253,6 +253,14 @@ module.exports = async function createApp() {
   try { db.exec("ALTER TABLE service_cards ADD COLUMN boathouse_no INTEGER"); } catch(e) {}
   try { db.exec("ALTER TABLE service_cards ADD COLUMN slip_no INTEGER"); } catch(e) {}
 
+  // Migrate: add customer_token for public customer view
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN customer_token TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE service_cards ADD COLUMN pickup_delivery TEXT DEFAULT NULL"); } catch(e) {}
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_customer_token ON service_cards(customer_token)"); } catch(e) {}
+
+  // Migrate: add unit_price to service_item_templates
+  try { db.exec("ALTER TABLE service_item_templates ADD COLUMN unit_price REAL DEFAULT 0"); } catch(e) {}
+
   // Create boat_assignments table
   db.exec(`
     CREATE TABLE IF NOT EXISTS boat_assignments (
@@ -618,6 +626,13 @@ module.exports = async function createApp() {
   const RECEIVED_ITEMS = ['battery', 'keys', 'cover', 'paddles', 'life_jackets', 'cushions', 'gas_cans', 'tie_ropes', 'lights'];
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
+  function generateCustomerToken() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let token = '';
+    for (let i = 0; i < 8; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+    return token;
+  }
+
   app.post('/api/cards', requireEditor, (req, res) => {
     const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no } = req.body;
     if (!boat_id) return res.status(400).json({ error: 'Boat required' });
@@ -636,10 +651,16 @@ module.exports = async function createApp() {
       storage_location = parts.join(', ')
     }
 
+    let customerToken = generateCustomerToken();
+    // Ensure uniqueness
+    while (db.prepare('SELECT id FROM service_cards WHERE customer_token = ?').get(customerToken)) {
+      customerToken = generateCustomerToken();
+    }
+
     const r = db.prepare(`
-      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, storage_location, storage_building, storage_row, storage_col, boathouse_no, slip_no, wrap_required, remarks, other_work, date_in, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, storage_location, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id);
+      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, storage_location, storage_building, storage_row, storage_col, boathouse_no, slip_no, wrap_required, remarks, other_work, date_in, created_by, customer_token)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, storage_location, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id, customerToken);
     const cardId = r.lastInsertRowid;
     const ii = db.prepare('INSERT OR IGNORE INTO received_items (card_id, item) VALUES (?, ?)');
     RECEIVED_ITEMS.forEach(item => ii.run(cardId, item));
@@ -658,10 +679,10 @@ module.exports = async function createApp() {
     if (!card) return res.status(404).json({ error: 'Not found' });
 
     const isEditor = req.employee.role === 'admin' || req.employee.role === 'office';
-    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no, storage_building, storage_row, storage_col, boathouse_no, slip_no } = req.body;
+    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no, storage_building, storage_row, storage_col, boathouse_no, slip_no, pickup_delivery } = req.body;
     
     if (!isEditor) {
-       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no', 'storage_building', 'storage_row', 'storage_col', 'boathouse_no', 'slip_no'];
+       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no', 'storage_building', 'storage_row', 'storage_col', 'boathouse_no', 'slip_no', 'pickup_delivery'];
        const hasProtected = protectedKeys.some(k => req.body[k] !== undefined);
        if (hasProtected) return res.status(403).json({ error: 'Only admin and office can edit relevant data' });
     }
@@ -695,8 +716,10 @@ module.exports = async function createApp() {
       wrap_required = COALESCE(?, wrap_required),
       remarks = COALESCE(?, remarks), other_work = COALESCE(?, other_work),
       date_out = COALESCE(?, date_out), invoice_number = COALESCE(?, invoice_number),
-      work_order_no = COALESCE(?, work_order_no), updated_at = datetime('now')
-      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, id);
+      work_order_no = COALESCE(?, work_order_no),
+      pickup_delivery = COALESCE(?, pickup_delivery),
+      updated_at = datetime('now')
+      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, pickup_delivery ?? null, id);
     res.json({ ok: true });
   });
 
@@ -729,20 +752,20 @@ module.exports = async function createApp() {
   });
 
   app.post('/api/authorized-items', requireAdmin, (req, res) => {
-    const { item_key, label, category, cleaning_cat, sort_order } = req.body;
+    const { item_key, label, category, cleaning_cat, sort_order, unit_price } = req.body;
     if (!item_key || !label || !category) return res.status(400).json({ error: 'Key, label, and category required' });
     if (!['service', 'cleaning'].includes(category)) return res.status(400).json({ error: 'Category must be service or cleaning' });
     try {
-      const r = db.prepare('INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order) VALUES (?, ?, ?, ?, ?)')
-        .run(item_key, label, category, cleaning_cat || null, sort_order != null ? sort_order : 0);
-      res.json({ id: r.lastInsertRowid, item_key, label, category });
+      const r = db.prepare('INSERT INTO service_item_templates (item_key, label, category, cleaning_cat, sort_order, unit_price) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(item_key, label, category, cleaning_cat || null, sort_order != null ? sort_order : 0, unit_price || 0);
+      res.json({ id: r.lastInsertRowid, item_key, label, category, unit_price: unit_price || 0 });
     } catch (e) {
       res.status(400).json({ error: 'Item key already exists' });
     }
   });
 
   app.put('/api/authorized-items/:id', requireAdmin, (req, res) => {
-    const { label, category, cleaning_cat, sort_order, active } = req.body;
+    const { label, category, cleaning_cat, sort_order, active, unit_price } = req.body;
     const updates = [];
     const params = [];
     if (label !== undefined) { updates.push('label = ?'); params.push(label); }
@@ -750,6 +773,7 @@ module.exports = async function createApp() {
     if (cleaning_cat !== undefined) { updates.push('cleaning_cat = ?'); params.push(cleaning_cat); }
     if (sort_order !== undefined) { updates.push('sort_order = ?'); params.push(sort_order); }
     if (active !== undefined) { updates.push('active = ?'); params.push(active ? 1 : 0); }
+    if (unit_price !== undefined) { updates.push('unit_price = ?'); params.push(unit_price); }
     if (updates.length) db.prepare(`UPDATE service_item_templates SET ${updates.join(', ')} WHERE id=?`).run(...params, req.params.id);
     res.json({ ok: true });
   });
@@ -784,6 +808,12 @@ module.exports = async function createApp() {
   });
 
   app.put('/api/cards/:id/condition', requireAuth, (req, res) => {
+    const card = db.prepare('SELECT status FROM service_cards WHERE id = ?').get(req.params.id);
+    if (!card) return res.status(404).json({ error: 'Not found' });
+    const isEditor = req.employee.role === 'admin' || req.employee.role === 'office';
+    if (card.status !== 'intake' && !isEditor) {
+      return res.status(403).json({ error: 'Condition assessment can only be edited during intake or by admin/office' });
+    }
     const upd = db.prepare('UPDATE condition_assessment SET rating=?, notes=? WHERE card_id=? AND area=?');
     (req.body.condition || []).forEach(({ area, rating, notes }) => upd.run(rating || null, notes || null, req.params.id, area));
     res.json({ ok: true });
@@ -870,6 +900,32 @@ module.exports = async function createApp() {
   // ─── VERSION ──────────────────────────────────────────────────────────────────
   app.get('/api/version', (req, res) => {
     res.json({ version: require('./package.json').version });
+  });
+
+  // ─── PUBLIC CUSTOMER VIEW ──────────────────────────────────────────────────────
+  app.get('/api/public/card/:token', (req, res) => {
+    const card = db.prepare(`
+      SELECT sc.id, sc.work_order_no, sc.status, sc.season_year, sc.storage_type, sc.storage_location,
+             sc.wrap_required, sc.remarks, sc.other_work, sc.date_in, sc.date_out,
+             sc.invoice_status, sc.pickup_delivery,
+             c.name as customer_name, c.phone as customer_phone,
+             b.name as boat_name, b.motor_type, b.model, b.licence, b.length_ft, b.rate_type
+      FROM service_cards sc
+      JOIN boats b ON sc.boat_id = b.id
+      JOIN customers c ON b.customer_id = c.id
+      WHERE sc.customer_token = ?
+    `).get(req.params.token);
+    if (!card) return res.status(404).json({ error: 'Not found' });
+    card.authorized_work = db.prepare('SELECT * FROM authorized_work WHERE card_id = ?').all(card.id);
+    card.photos = db.prepare('SELECT filename, photo_type FROM photos WHERE card_id = ? ORDER BY uploaded_at DESC').all(card.id);
+    card.checklists = db.prepare('SELECT * FROM checklist_completions WHERE card_id = ?').all(card.id);
+    card.status_history = db.prepare(`
+      SELECT sh.*, e.name as employee_name FROM status_history sh
+      LEFT JOIN employees e ON sh.employee_id = e.id
+      WHERE sh.card_id = ? ORDER BY sh.changed_at DESC
+    `).all(card.id);
+    card.invoice = db.prepare('SELECT * FROM invoice_items WHERE card_id = ? ORDER BY sort_order').all(card.id);
+    res.json(card);
   });
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────

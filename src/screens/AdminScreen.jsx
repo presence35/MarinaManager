@@ -5,24 +5,25 @@ import { api } from '../api'
 import { ROLE_COLORS } from '../constants'
 import Icon from '../components/Icon'
 
-export default function AdminScreen() {
+export default function AdminScreen({ params = {} }) {
   const showToast = useContext(ToastCtx)
   const { navigate } = useContext(NavCtx)
   const [employees, setEmployees] = useState([])
   const [showNew, setShowNew] = useState(false)
   const [newEmp, setNewEmp] = useState({ name: '', role: 'mechanic', initials: '', pin: '' })
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState('employees')
+  const [tab, setTab] = useState(params.tab || 'employees')
   const [assignments, setAssignments] = useState([])
   const [boats, setBoats] = useState([])
   const [assignBoatId, setAssignBoatId] = useState('')
   const [assignEmpId, setAssignEmpId] = useState('')
   const [items, setItems] = useState([])
   const [showNewItem, setShowNewItem] = useState(false)
-  const [newItem, setNewItem] = useState({ item_key: '', label: '', category: 'service', cleaning_cat: 'Interior', sort_order: 0 })
+  const [newItem, setNewItem] = useState({ item_key: '', label: '', category: 'service', cleaning_cat: 'Interior', sort_order: 0, unit_price: 0 })
   const [editingItemId, setEditingItemId] = useState(null)
   const [editLabel, setEditLabel] = useState('')
   const [editCleaningCat, setEditCleaningCat] = useState('')
+  const [editPrice, setEditPrice] = useState(0)
 
   const reload = () => api('GET', '/employees').then(setEmployees).catch(() => {})
   useEffect(() => { reload() }, [])
@@ -102,11 +103,12 @@ export default function AdminScreen() {
         category: newItem.category,
         cleaning_cat: newItem.category === 'cleaning' ? newItem.cleaning_cat : null,
         sort_order: items.length + 1,
+        unit_price: newItem.unit_price || 0,
       })
       showToast('Item created')
-      setNewItem({ item_key: '', label: '', category: 'service', cleaning_cat: 'Interior', sort_order: 0 })
+      setNewItem({ item_key: '', label: '', category: 'service', cleaning_cat: 'Interior', sort_order: 0, unit_price: 0 })
       setShowNewItem(false)
-      setItems([...items, { id: created.id, item_key: key, label: newItem.label.trim(), category: newItem.category, cleaning_cat: newItem.category === 'cleaning' ? newItem.cleaning_cat : null, sort_order: items.length + 1, active: 1 }])
+      setItems([...items, { id: created.id, item_key: key, label: newItem.label.trim(), category: newItem.category, cleaning_cat: newItem.category === 'cleaning' ? newItem.cleaning_cat : null, sort_order: items.length + 1, unit_price: newItem.unit_price || 0, active: 1 }])
     } catch (e) { showToast(e.message || 'Failed') }
   }
 
@@ -121,18 +123,19 @@ export default function AdminScreen() {
     setEditingItemId(item.id)
     setEditLabel(item.label)
     setEditCleaningCat(item.cleaning_cat || '')
+    setEditPrice(item.unit_price || 0)
   }
 
   const saveEdit = async (item) => {
     if (!editLabel.trim()) { showToast('Label required'); return }
     try {
       const key = labelToKey(editLabel)
-      const body = { item_key: key, label: editLabel.trim() }
+      const body = { item_key: key, label: editLabel.trim(), unit_price: Number(editPrice) || 0 }
       if (item.category === 'cleaning') body.cleaning_cat = editCleaningCat
       await api('PUT', `/authorized-items/${item.id}`, body)
       showToast('Item updated')
       setEditingItemId(null)
-      setItems(items.map(i => i.id === item.id ? { ...i, label: editLabel.trim(), item_key: key, cleaning_cat: i.category === 'cleaning' ? editCleaningCat : i.cleaning_cat } : i))
+      setItems(items.map(i => i.id === item.id ? { ...i, label: editLabel.trim(), item_key: key, unit_price: Number(editPrice) || 0, cleaning_cat: i.category === 'cleaning' ? editCleaningCat : i.cleaning_cat } : i))
     } catch (e) { showToast('Failed') }
   }
 
@@ -282,6 +285,11 @@ export default function AdminScreen() {
                     </div>
                   </div>
                 )}
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Default Price ($)</label>
+                  <input type="number" step="0.01" min="0" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                    value={newItem.unit_price} onChange={(e) => setNewItem({ ...newItem, unit_price: Number(e.target.value) })} />
+                </div>
                 <button className="btn btn-primary" onClick={createItem}>Create Item</button>
               </div>
             </div>
@@ -305,6 +313,8 @@ export default function AdminScreen() {
                               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                                 <input type="text" style={{ flex: 1, minWidth: 120, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 10px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
                                   value={editLabel} onChange={(e) => setEditLabel(e.target.value)} />
+                                <input type="number" step="0.01" min="0" placeholder="Price" style={{ width: 70, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 8px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
+                                  value={editPrice} onChange={(e) => setEditPrice(Number(e.target.value))} />
                                 {item.category === 'cleaning' && (
                                   <select style={{ background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '6px 10px', fontFamily: 'Barlow', fontSize: 13, color: 'var(--text)', outline: 'none' }}
                                     value={editCleaningCat} onChange={(e) => setEditCleaningCat(e.target.value)}>
@@ -318,6 +328,9 @@ export default function AdminScreen() {
                             ) : (
                               <div onClick={() => startEdit(item)} style={{ cursor: 'pointer' }}>
                                 <div style={{ fontFamily: 'Bebas Neue', fontSize: 15, letterSpacing: 0.5, color: item.active ? 'var(--text)' : 'var(--text3)' }}>{item.label}</div>
+                                {item.unit_price > 0 && (
+                                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>${Number(item.unit_price).toFixed(2)}</div>
+                                )}
                               </div>
                             )}
                           </div>

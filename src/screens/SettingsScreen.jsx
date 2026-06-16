@@ -57,27 +57,30 @@ export default function SettingsScreen() {
         })}
       </div>
 
-      <div className="section-head">Profile</div>
-      <div className="card" style={{ margin: '0 12px' }}>
-        <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue', fontSize: 20, letterSpacing: 1, color: '#fff' }}>
-            {employee?.initials || employee?.name?.slice(0, 2).toUpperCase()}
-          </div>
-          <div>
-            <div style={{ fontFamily: 'Bebas Neue', fontSize: 18, letterSpacing: 1, color: 'var(--text)' }}>{employee?.name}</div>
-            <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: ROLE_COLORS[employee?.role] || 'var(--text3)', textTransform: 'uppercase' }}>{employee?.role}</div>
-          </div>
-        </div>
-      </div>
-
-      {employee?.role === 'admin' && <div className="section-head">Administration</div>}
+      {employee?.role === 'admin' && <div className="section-head">Lists</div>}
       {employee?.role === 'admin' && (
         <div className="card" style={{ margin: '0 12px' }}>
-          <button onClick={() => navigate('admin')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+          <button onClick={() => navigate('admin', { tab: 'employees' })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
             <Icon name="user" size={18} color="var(--text2)" />
-            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Administration</span>
+            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Employees</span>
             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
           </button>
+          <button onClick={() => navigate('admin', { tab: 'assignments' })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+            <Icon name="edit" size={18} color="var(--text2)" />
+            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Assignments</span>
+            <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
+          </button>
+          <button onClick={() => navigate('admin', { tab: 'authorized_items' })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <Icon name="settings" size={18} color="var(--text2)" />
+            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Items</span>
+            <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
+          </button>
+        </div>
+      )}
+
+      {employee?.role === 'admin' && <div className="section-head">Export</div>}
+      {employee?.role === 'admin' && (
+        <div className="card" style={{ margin: '0 12px' }}>
           <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}>
             <Icon name="download" size={18} color="var(--text2)" />
             <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Export Database (ZIP)</span>
@@ -88,7 +91,7 @@ export default function SettingsScreen() {
 
       <button onClick={logout} className="sign-out-btn">
         <Icon name="anchor" size={18} color="var(--danger)" />
-        <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--danger)' }}>Sign Out</span>
+        <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--danger)' }}>Sign Out {employee?.name}</span>
       </button>
 
       <div style={{ textAlign: 'center', padding: '24px 16px', fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.5 }}>
