@@ -14,6 +14,7 @@ export default function ConditionRatingRow({ area, cardId, initialRating, initia
       await api('PUT', `/cards/${cardId}/condition`, {
         condition: [{ area, rating: newR, notes: initialNotes }],
       })
+      reload()
     } catch (e) {
       showToast('Save failed')
     }

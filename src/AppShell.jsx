@@ -1,4 +1,4 @@
-import { useState, useCallback, useContext } from 'react'
+import { useState, useCallback, useContext, useEffect, useRef } from 'react'
 import { AuthCtx } from './contexts/AuthCtx'
 import { NavCtx } from './contexts/NavCtx'
 import Icon from './components/Icon'
@@ -26,14 +26,38 @@ export default function AppShell() {
   const [screenStack, setScreenStack] = useState([
     { screen: 'cards', params: {} },
   ])
+  const stackRef = useRef(screenStack)
+  stackRef.current = screenStack
+  const isPoppingRef = useRef(false)
   const current = screenStack[screenStack.length - 1]
 
+  useEffect(() => {
+    window.history.replaceState({ idx: 0 }, '')
+  }, [])
+
+  useEffect(() => {
+    const onPopState = () => {
+      const stack = stackRef.current
+      if (stack.length > 1) {
+        isPoppingRef.current = true
+        setScreenStack(prev => prev.slice(0, -1))
+      } else {
+        window.history.pushState({ idx: 0 }, '')
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   const navigate = useCallback((screen, params = {}) => {
+    window.history.pushState({ screen, params }, '')
     setScreenStack((prev) => [...prev, { screen, params }])
   }, [])
 
   const goBack = useCallback(() => {
-    setScreenStack((prev) => prev.length > 1 ? prev.slice(0, -1) : prev)
+    if (stackRef.current.length > 1) {
+      window.history.back()
+    }
   }, [])
 
   const activeNav = ['map', 'settings', 'cards', 'customers', 'boats'].includes(current.screen) ? current.screen : ''
@@ -54,6 +78,11 @@ export default function AppShell() {
     }
   }
 
+  const handleNavTap = useCallback((key) => {
+    window.history.replaceState({ idx: 0 }, '')
+    setScreenStack([{ screen: key, params: {} }])
+  }, [])
+
   return (
     <NavCtx.Provider value={{ navigate, goBack }}>
       <div className="app-shell">
@@ -63,7 +92,7 @@ export default function AppShell() {
             <button
               key={item.key}
               className={`nav-item ${activeNav === item.key ? 'active' : ''}`}
-              onClick={() => setScreenStack([{ screen: item.key, params: {} }])}
+              onClick={() => handleNavTap(item.key)}
             >
               <span className="nav-item-icon"><Icon name={item.icon} size={24} /></span>
             </button>
