@@ -156,13 +156,11 @@ function InfoTab({ card, reload }) {
             <div className="row-2" style={{ marginBottom: 12 }}>
               <div>
                 <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Work Order #</label>
-                <input style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                  value={form.work_order_no} onChange={(e) => setForm({ ...form, work_order_no: e.target.value })} />
+                <div style={{ fontFamily: 'Barlow', fontSize: 14, color: 'var(--text3)', padding: '9px 12px' }}>{form.work_order_no || '—'}</div>
               </div>
               <div>
                 <label style={{ fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text2)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Invoice #</label>
-                <input style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                  value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} />
+                <div style={{ fontFamily: 'Barlow', fontSize: 14, color: 'var(--text3)', padding: '9px 12px' }}>{form.invoice_number || '—'}</div>
               </div>
             </div>
 
@@ -1403,7 +1401,7 @@ function InvoiceTab({ card, reload }) {
           <div className="row-2" style={{ marginBottom: 12 }}>
             <div className="field">
               <label>Invoice #</label>
-              <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} disabled={!isEditable} />
+              <div style={{ fontFamily: 'Barlow', fontSize: 14, color: 'var(--text3)', padding: '9px 0' }}>{invoiceNumber || '—'}</div>
             </div>
             <div className="field">
               <label>HST Rate (%)</label>

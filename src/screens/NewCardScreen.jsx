@@ -223,7 +223,7 @@ export default function NewCardScreen({ params = {} }) {
       </div>
       <div className="field" style={{ paddingTop: 16 }}>
         <label>Work Order #</label>
-        <input placeholder="e.g. 151824" value={cardForm.work_order_no} onChange={(e) => setCardForm({ ...cardForm, work_order_no: e.target.value })} />
+        <div style={{ fontFamily: 'Barlow', fontSize: 14, color: 'var(--text3)', padding: '9px 12px' }}>{cardForm.work_order_no || '—'}</div>
       </div>
       <div className="field">
         <label>Date In</label>
