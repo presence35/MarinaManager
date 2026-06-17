@@ -1,4 +1,4 @@
-import { useState, useContext, useRef } from 'react'
+import { useState, useContext, useRef, useEffect } from 'react'
 import { NavCtx } from '../contexts/NavCtx'
 import { AuthCtx } from '../contexts/AuthCtx'
 import { ToastCtx } from '../contexts/ToastCtx'
@@ -7,7 +7,7 @@ import Icon from '../components/Icon'
 import ProductAutocomplete from '../components/ProductAutocomplete'
 
 export default function NewLogScreen({ params = {} }) {
-  const { goBack } = useContext(NavCtx)
+  const { goBack, setDirty } = useContext(NavCtx)
   const { employee } = useContext(AuthCtx)
   const showToast = useContext(ToastCtx)
   const [form, setForm] = useState({
@@ -19,6 +19,12 @@ export default function NewLogScreen({ params = {} }) {
   const [transcript, setTranscript] = useState('')
   const recognitionRef = useRef(null)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const isDirty = form.description !== '' || parts.length > 0
+    setDirty(isDirty)
+    return () => setDirty(false)
+  }, [form.description, parts, setDirty])
 
   const startRecording = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -62,6 +68,7 @@ export default function NewLogScreen({ params = {} }) {
           quantity: p.quantity,
         })),
       })
+      setDirty(false)
       showToast('Log entry saved')
       goBack()
     } catch (e) { showToast('Save failed') }

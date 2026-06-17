@@ -7,7 +7,7 @@ import Icon from '../components/Icon'
 
 export default function NewCardScreen({ params = {} }) {
   const { target = 'card' } = params
-  const { navigate, goBack } = useContext(NavCtx)
+  const { navigate, goBack, setDirty } = useContext(NavCtx)
   const showToast = useContext(ToastCtx)
   const [step, setStep] = useState(params.initialStep || 'customer')
   const [customerSearch, setCustomerSearch] = useState('')
@@ -18,7 +18,7 @@ export default function NewCardScreen({ params = {} }) {
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', city: '' })
   const [newBoat, setNewBoat] = useState({ name: '', motor_type: '', model: '', licence: '', trailer_licence: '', length_ft: '' })
   const [cardForm, setCardForm] = useState({
-    work_order_no: 'WO-' + Math.floor(Math.random() * 90000 + 10000),
+    work_order_no: '',
     storage_type: '',
     wrap_required: false,
     remarks: '',
@@ -42,6 +42,21 @@ export default function NewCardScreen({ params = {} }) {
     }
   }, [customerSearch])
 
+  useEffect(() => {
+    api('GET', '/next-work-order-number').then(data => {
+      setCardForm(f => ({ ...f, work_order_no: data.work_order_no }))
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const hasCustomerData = Object.values(newCustomer).some(v => v !== '')
+    const hasBoatData = Object.values(newBoat).some(v => v !== '')
+    const hasCardData = cardForm.storage_type || cardForm.wrap_required || cardForm.other_work || cardForm.remarks || cardForm.storage_building || cardForm.storage_row || cardForm.storage_col || cardForm.boathouse_no || cardForm.slip_no
+    const isDirty = step !== 'customer' || hasCustomerData || hasBoatData || hasCardData
+    setDirty(isDirty)
+    return () => setDirty(false)
+  }, [step, newCustomer, newBoat, cardForm, setDirty])
+
   const selectCustomer = (c) => {
     if (target === 'customer') { showToast('Customer already exists'); goBack(); return }
     setCustomer(c)
@@ -55,7 +70,7 @@ export default function NewCardScreen({ params = {} }) {
     setSaving(true)
     try {
       const c = await api('POST', '/customers', newCustomer)
-      if (target === 'customer') { showToast('Customer created'); goBack() }
+      if (target === 'customer') { setDirty(false); showToast('Customer created'); goBack() }
       else { setCustomer({ ...newCustomer, id: c.id }); setBoats([]); setStep('boat'); setCreatingCustomer(false) }
     } catch (e) { showToast(e.message || 'Failed to create customer') }
     setSaving(false)
@@ -72,17 +87,18 @@ export default function NewCardScreen({ params = {} }) {
     setSaving(true)
     try {
       const b = await api('POST', '/boats', { ...newBoat, customer_id: customer.id })
-      if (target === 'boat') { showToast('Boat created'); goBack() }
+      if (target === 'boat') { setDirty(false); showToast('Boat created'); goBack() }
       else { setBoat({ ...newBoat, id: b.id }); setStep('card'); setCreatingBoat(false) }
     } catch (e) { showToast(e.message || 'Failed to create boat') }
     setSaving(false)
   }
 
-  const createCard = async () => {
+  const createCard = async (isFake) => {
     setSaving(true)
     try {
-      const card = await api('POST', '/cards', { boat_id: boat.id, ...cardForm, season_year: new Date().getFullYear() })
-      showToast('Card created!')
+      const card = await api('POST', '/cards', { boat_id: boat.id, ...cardForm, season_year: new Date().getFullYear(), is_fake: isFake ? 1 : 0 })
+      setDirty(false)
+      showToast(isFake ? 'FAKE card created!' : 'Card created!')
       navigate('card', { id: card.id })
     } catch (e) { showToast(e.message || 'Failed to create card') }
     setSaving(false)
@@ -282,8 +298,11 @@ export default function NewCardScreen({ params = {} }) {
           onChange={(e) => setCardForm({ ...cardForm, remarks: e.target.value })} />
       </div>
       <div style={{ padding: '4px 16px 24px' }}>
-        <button className="btn btn-primary" onClick={createCard} disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
+        <button className="btn btn-primary" onClick={() => createCard(false)} disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
           {saving ? 'Creating...' : '\u2693 Create Service Card'}
+        </button>
+        <button onClick={() => createCard(true)} disabled={saving} style={{ width: '100%', marginTop: 8, padding: '14px 0', background: '#c0392b', color: '#fff', border: 'none', borderRadius: 'var(--r3)', fontFamily: 'Bebas Neue', fontSize: 18, letterSpacing: 1.2, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+          {saving ? 'Creating...' : '\u26A0 Create FAKE Service Card'}
         </button>
       </div>
     </div>

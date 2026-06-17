@@ -2,6 +2,7 @@ import { useState, useCallback, useContext, useEffect, useRef } from 'react'
 import { AuthCtx } from './contexts/AuthCtx'
 import { NavCtx } from './contexts/NavCtx'
 import Icon from './components/Icon'
+import ConfirmLeaveDialog from './components/ConfirmLeaveDialog'
 import CardsScreen from './screens/CardsScreen'
 import CustomersScreen from './screens/CustomersScreen'
 import BoatsScreen from './screens/BoatsScreen'
@@ -31,6 +32,13 @@ export default function AppShell() {
   const isPoppingRef = useRef(false)
   const current = screenStack[screenStack.length - 1]
 
+  const dirtyRef = useRef(false)
+  const [pendingNav, setPendingNav] = useState(null)
+
+  const setDirty = useCallback((val) => {
+    dirtyRef.current = !!val
+  }, [])
+
   useEffect(() => {
     window.history.replaceState({ idx: 0 }, '')
   }, [])
@@ -39,6 +47,11 @@ export default function AppShell() {
     const onPopState = () => {
       const stack = stackRef.current
       if (stack.length > 1) {
+        if (dirtyRef.current) {
+          window.history.pushState({}, '')
+          setPendingNav({ type: 'pop' })
+          return
+        }
         isPoppingRef.current = true
         setScreenStack(prev => prev.slice(0, -1))
       } else {
@@ -49,13 +62,32 @@ export default function AppShell() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (dirtyRef.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
+
   const navigate = useCallback((screen, params = {}) => {
+    if (dirtyRef.current) {
+      setPendingNav({ type: 'navigate', screen, params })
+      return
+    }
     window.history.pushState({ screen, params }, '')
     setScreenStack((prev) => [...prev, { screen, params }])
   }, [])
 
   const goBack = useCallback(() => {
     if (stackRef.current.length > 1) {
+      if (dirtyRef.current) {
+        setPendingNav({ type: 'pop' })
+        return
+      }
       window.history.back()
     }
   }, [])
@@ -79,12 +111,36 @@ export default function AppShell() {
   }
 
   const handleNavTap = useCallback((key) => {
+    if (dirtyRef.current) {
+      setPendingNav({ type: 'nav', key })
+      return
+    }
     window.history.replaceState({ idx: 0 }, '')
     setScreenStack([{ screen: key, params: {} }])
   }, [])
 
+  const handleDiscard = useCallback(() => {
+    dirtyRef.current = false
+    const action = pendingNav
+    setPendingNav(null)
+    if (!action) return
+    if (action.type === 'navigate') {
+      window.history.pushState({ screen: action.screen, params: action.params }, '')
+      setScreenStack((prev) => [...prev, { screen: action.screen, params: action.params }])
+    } else if (action.type === 'pop') {
+      window.history.back()
+    } else if (action.type === 'nav') {
+      window.history.replaceState({ idx: 0 }, '')
+      setScreenStack([{ screen: action.key, params: {} }])
+    }
+  }, [pendingNav])
+
+  const handleKeep = useCallback(() => {
+    setPendingNav(null)
+  }, [])
+
   return (
-    <NavCtx.Provider value={{ navigate, goBack }}>
+    <NavCtx.Provider value={{ navigate, goBack, setDirty }}>
       <div className="app-shell">
         <div className="screen-body">{renderScreen()}</div>
         <div className="bottom-nav">
@@ -99,6 +155,7 @@ export default function AppShell() {
           ))}
         </div>
       </div>
+      {pendingNav && <ConfirmLeaveDialog onDiscard={handleDiscard} onKeep={handleKeep} />}
     </NavCtx.Provider>
   )
 }

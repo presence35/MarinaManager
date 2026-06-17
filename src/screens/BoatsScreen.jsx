@@ -6,7 +6,7 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 
 export default function BoatsScreen({ params }) {
-  const { navigate } = useContext(NavCtx)
+  const { navigate, setDirty } = useContext(NavCtx)
   const { employee } = useContext(AuthCtx)
   const showToast = useContext(ToastCtx)
   const [boats, setBoats] = useState([])
@@ -14,6 +14,7 @@ export default function BoatsScreen({ params }) {
   const [loading, setLoading] = useState(true)
   const [editingBoat, setEditingBoat] = useState(null)
   const handledAutoOpen = useRef(false)
+  const originalBoatRef = useRef(null)
 
   const fetchBoats = () => {
     setLoading(true)
@@ -29,11 +30,21 @@ export default function BoatsScreen({ params }) {
     if (params?.editBoatId && boats.length > 0 && !handledAutoOpen.current) {
       const boat = boats.find(b => b.id === params.editBoatId)
       if (boat) {
+        originalBoatRef.current = { ...boat }
         setEditingBoat(boat)
         handledAutoOpen.current = true
       }
     }
   }, [params?.editBoatId, boats])
+
+  useEffect(() => {
+    if (!editingBoat || !originalBoatRef.current) { setDirty(false); return }
+    const orig = originalBoatRef.current
+    const fields = ['name', 'model', 'motor_type', 'rate_type', 'length_ft', 'licence', 'trailer_licence']
+    const changed = fields.some(f => (editingBoat[f] || '') !== (orig[f] || ''))
+    setDirty(changed)
+    return () => setDirty(false)
+  }, [editingBoat, setDirty])
 
   const navigateToBoatCard = async (boat) => {
     try {
@@ -48,6 +59,7 @@ export default function BoatsScreen({ params }) {
     if (!editingBoat.name && !editingBoat.model) return showToast('Name or model required')
     try {
       await api('PUT', `/boats/${editingBoat.id}`, editingBoat)
+      setDirty(false)
       showToast('Boat updated')
       setEditingBoat(null)
       setBoats(boats.map(b => b.id === editingBoat.id ? { ...b, ...editingBoat } : b))
@@ -88,7 +100,7 @@ export default function BoatsScreen({ params }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setEditingBoat(null)}>Cancel</button>
+            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setDirty(false); setEditingBoat(null) }}>Cancel</button>
             <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveBoat}>Save</button>
           </div>
         </div>
@@ -127,7 +139,7 @@ export default function BoatsScreen({ params }) {
                 <div style={{ fontSize: 13, color: 'var(--text3)' }}>{b.customer_name} · {b.model} · {b.licence}{b.trailer_licence ? ` · T:${b.trailer_licence}` : ''}</div>
               </div>
               {(employee?.role === 'admin' || employee?.role === 'office') && (
-                <button onClick={() => setEditingBoat(b)} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 8, flexShrink: 0 }}>
+                <button onClick={() => { originalBoatRef.current = { ...b }; setEditingBoat(b) }} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 8, flexShrink: 0 }}>
                   <Icon name="edit" size={18} />
                 </button>
               )}

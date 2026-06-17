@@ -3,30 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const mysql = require('mysql2/promise');
-
-class MySQLDatabase {
-  constructor(pool) { this.pool = pool; }
-  async exec(sql) { await this.pool.query(sql); }
-  prepare(sql) {
-    const pool = this.pool;
-    return {
-      async get(...params) {
-        const [rows] = await pool.query(sql, params);
-        return rows[0] || undefined;
-      },
-      async all(...params) {
-        const [rows] = await pool.query(sql, params);
-        return rows;
-      },
-      async run(...params) {
-        const [result] = await pool.query(sql, params);
-        return { lastInsertRowid: result.insertId, changes: result.affectedRows };
-      }
-    };
-  }
-  async close() { await this.pool.end(); }
-}
+const createDatabase = require('./db');
 
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -41,18 +18,15 @@ module.exports = async function createApp() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
 
-  const dbConfig = {
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT || '3306'),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-  };
+  const db = await createDatabase();
+  const pool = db.getPool();
 
-  const pool = mysql.createPool(dbConfig);
-  const db = new MySQLDatabase(pool);
+  try {
+    await db.exec("ALTER TABLE service_cards ADD COLUMN is_fake INTEGER DEFAULT 0");
+    console.log("  Added is_fake column to service_cards");
+  } catch (e) {
+    // Column already exists, ignore
+  }
 
   function generateCustomerToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -147,10 +121,12 @@ module.exports = async function createApp() {
   }
 
   app.use(express.json({ limit: '10mb' }));
-  const staticDir = fs.existsSync(path.join(__dirname, 'dist'))
-    ? path.join(__dirname, 'dist')
-    : path.join(__dirname, 'public');
-  app.use(express.static(staticDir));
+  const staticDir = path.join(__dirname, 'dist');
+  if (!fs.existsSync(staticDir)) {
+    console.error('  Build not found. Run "npm run build" first.');
+    process.exit(1);
+  }
+  app.use('/language', express.static(staticDir));
   app.use('/photos', express.static(PHOTOS_DIR));
 
   app.get('/_health/liveness', (req, res) => res.json({ status: 'ok' }));
@@ -430,7 +406,7 @@ module.exports = async function createApp() {
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
   app.post('/api/cards', requireEditor, asyncHandler(async (req, res) => {
-    const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no } = req.body;
+    const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no, is_fake } = req.body;
     if (!boat_id) return res.status(400).json({ error: 'Boat required' });
 
     let storage_location = null;
@@ -453,9 +429,9 @@ module.exports = async function createApp() {
     }
 
     const r = await db.prepare(`
-      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, storage_location, storage_building, storage_row, storage_col, boathouse_no, slip_no, wrap_required, remarks, other_work, date_in, created_by, customer_token)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, storage_location, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id, customerToken);
+      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, storage_location, storage_building, storage_row, storage_col, boathouse_no, slip_no, wrap_required, remarks, other_work, date_in, created_by, customer_token, is_fake)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, storage_location, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id, customerToken, is_fake ? 1 : 0);
     const cardId = r.lastInsertRowid;
 
     for (const item of RECEIVED_ITEMS) {
@@ -634,6 +610,18 @@ module.exports = async function createApp() {
     res.json(card);
   }));
 
+  app.get('/api/next-work-order-number', requireAuth, asyncHandler(async (req, res) => {
+    const maxWO = await db.prepare("SELECT MAX(CAST(REPLACE(work_order_no, 'WO-', '') AS UNSIGNED)) as maxNum FROM service_cards WHERE work_order_no LIKE 'WO-%'").get();
+    const nextNum = (maxWO && maxWO.maxNum) ? maxWO.maxNum + 1 : 1000;
+    res.json({ work_order_no: 'WO-' + nextNum });
+  }));
+
+  app.get('/api/next-invoice-number', requireAuth, asyncHandler(async (req, res) => {
+    const maxInv = await db.prepare("SELECT MAX(CAST(REPLACE(invoice_number, 'INV-', '') AS UNSIGNED)) as maxNum FROM service_cards WHERE invoice_number LIKE 'INV-%'").get();
+    const nextNum = (maxInv && maxInv.maxNum) ? maxInv.maxNum + 1 : 1000;
+    res.json({ invoice_number: 'INV-' + nextNum });
+  }));
+
   app.put('/api/cards/:id/invoice', requireEditor, asyncHandler(async (req, res) => {
     const { invoice_number, invoice_status, tax_rate, items } = req.body;
     if (invoice_number !== undefined || invoice_status !== undefined || tax_rate !== undefined) {
@@ -805,6 +793,10 @@ module.exports = async function createApp() {
     if (fs.existsSync(PHOTOS_DIR)) archive.directory(PHOTOS_DIR, 'photos');
     archive.finalize();
   }));
+
+  app.get('/language*', (req, res) => {
+    res.sendFile(path.join(staticDir, 'index.html'));
+  });
 
   app.get('*', (req, res) => {
     res.sendFile(path.join(staticDir, 'index.html'));

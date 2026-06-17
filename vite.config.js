@@ -29,7 +29,7 @@ export default defineConfig({
       },
     }),
   ],
-  base: '',
+  base: '/language/',
   build: {
     outDir: 'dist',
   },

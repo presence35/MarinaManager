@@ -11,6 +11,7 @@ export default function CardsScreen({ params = {} }) {
   const { employee } = useContext(AuthCtx)
   const [allCards, setAllCards] = useState([])
   const [filter, setFilter] = useState(params.filterStatus || 'all')
+  const [showFake, setShowFake] = useState(false)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [assignments, setAssignments] = useState([])
@@ -33,7 +34,11 @@ export default function CardsScreen({ params = {} }) {
       .catch(() => setLoading(false))
   }, [search])
 
-  const cards = allCards.filter(c => filter === 'all' || c.status === filter)
+  const cards = allCards.filter(c => {
+    if (showFake && !c.is_fake) return false
+    if (filter === 'all') return true
+    return c.status === filter
+  })
   const assignedBoatIds = new Set(assignments.map(a => a.boat_id))
   const assignedCards = cards.filter(c => assignedBoatIds.has(c.boat_id))
   const otherCards = cards.filter(c => !assignedBoatIds.has(c.boat_id))
@@ -55,14 +60,14 @@ export default function CardsScreen({ params = {} }) {
       </div>
 
       <div className="pipeline sticky-top">
-        {['all', ...STATUS_ORDER].map((s) => {
-          const cfg = s === 'all' ? { label: 'ALL', color: 'var(--text2)', bg: 'var(--surface2)' } : STATUS_CONFIG[s]
-          const isActive = filter === s
-          const count = s === 'all' ? allCards.length : allCards.filter(c => c.status === s).length
+        {['all', 'fake', ...STATUS_ORDER].map((s) => {
+          const cfg = s === 'all' ? { label: 'ALL', color: 'var(--text2)', bg: 'var(--surface2)' } : s === 'fake' ? { label: 'FAKE', color: '#c0392b', bg: 'rgba(192,57,43,.15)' } : STATUS_CONFIG[s]
+          const isActive = s === 'fake' ? showFake : filter === s
+          const count = s === 'all' ? allCards.filter(c => !showFake || c.is_fake).length : s === 'fake' ? allCards.filter(c => c.is_fake).length : allCards.filter(c => c.status === s && (!showFake || c.is_fake)).length
           return (
             <button key={s} className="pipe-step"
               style={{ background: isActive ? cfg.color : 'transparent', borderColor: isActive ? cfg.color : 'var(--border)', color: isActive ? '#fff' : cfg.color, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              onClick={() => setFilter(s)}>
+              onClick={() => s === 'fake' ? setShowFake(!showFake) : setFilter(s)}>
               <span>{cfg.label}</span>
               <span style={{ background: isActive ? 'rgba(255,255,255,0.2)' : 'var(--surface2)', color: isActive ? '#fff' : 'var(--text2)', padding: '2px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>{count}</span>
             </button>
@@ -114,11 +119,14 @@ export default function CardsScreen({ params = {} }) {
           <div className="job-card-boat">{card.boat_name || '(no name)'}</div>
           <div className="job-card-owner">{card.customer_name} {'\u00B7'} {card.motor_type || '—'}</div>
           <div className="job-card-meta">
+            {!!card.is_fake && (
+              <span className="inline-chip" style={{ borderColor: '#c0392b', color: '#c0392b', fontWeight: 700 }}>FAKE</span>
+            )}
             <StatusBadge status={card.status} />
-            {card.wrap_required && (
+            {!!card.wrap_required && (
               <span className="inline-chip" style={{ borderColor: 'var(--warn)', color: 'var(--warn)' }}>WRAP</span>
             )}
-            {card.storage_location && (
+            {!!card.storage_location && (
               <span className="inline-chip" style={{ borderColor: 'var(--text3)', color: 'var(--text3)' }}>{card.storage_location}</span>
             )}
           </div>

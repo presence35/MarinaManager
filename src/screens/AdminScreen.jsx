@@ -7,7 +7,7 @@ import Icon from '../components/Icon'
 
 export default function AdminScreen({ params = {} }) {
   const showToast = useContext(ToastCtx)
-  const { navigate } = useContext(NavCtx)
+  const { navigate, setDirty } = useContext(NavCtx)
   const [employees, setEmployees] = useState([])
   const [showNew, setShowNew] = useState(false)
   const [newEmp, setNewEmp] = useState({ name: '', role: 'mechanic', initials: '', pin: '' })
@@ -33,6 +33,16 @@ export default function AdminScreen({ params = {} }) {
   const [editProductUnit, setEditProductUnit] = useState('')
   const [editProductCategory, setEditProductCategory] = useState('')
   const [editProductPrice, setEditProductPrice] = useState(0)
+
+  useEffect(() => {
+    const hasEmpData = showNew && Object.values(newEmp).some(v => v !== '' && v !== 'mechanic')
+    const hasItemForm = showNewItem && (newItem.label !== '' || newItem.unit_price > 0)
+    const hasProdForm = showNewProduct && (newProduct.name !== '' || newProduct.unit_price > 0)
+    const isEditingItem = editingItemId !== null
+    const isEditingProduct = editingProductId !== null
+    setDirty(hasEmpData || hasItemForm || hasProdForm || isEditingItem || isEditingProduct)
+    return () => setDirty(false)
+  }, [showNew, newEmp, showNewItem, newItem, showNewProduct, newProduct, editingItemId, editingProductId, setDirty])
 
   const reload = () => api('GET', '/employees').then(setEmployees).catch(() => {})
   useEffect(() => { reload() }, [])

@@ -18,7 +18,7 @@ import ProductAutocomplete from '../components/ProductAutocomplete'
 async function addWorkItemToInvoice(cardId, workItem, prefix, templates) {
   const tmpl = (templates || []).find(t => t.item_key === workItem.service_type)
   const price = tmpl?.unit_price || 0
-  const desc = `${prefix}: ${workItem.service_type}`
+  const desc = `${prefix}: ${tmpl?.label || workItem.service_type}`
   const invoiceRes = await api('GET', `/cards/${cardId}/invoice`).catch(() => ({ items: [] }))
   const existingItems = invoiceRes.items || []
   if (existingItems.some(i => i.description === desc)) return 0
@@ -42,7 +42,7 @@ async function addWorkItemToInvoice(cardId, workItem, prefix, templates) {
 
 function InfoTab({ card, reload }) {
   const showToast = useContext(ToastCtx)
-  const { navigate } = useContext(NavCtx)
+  const { navigate, setDirty } = useContext(NavCtx)
   const { employee } = useContext(AuthCtx)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
@@ -58,9 +58,29 @@ function InfoTab({ card, reload }) {
     slip_no: card.slip_no || '',
   })
 
+  useEffect(() => {
+    if (!editing) { setDirty(false); return }
+    const initial = {
+      work_order_no: card.work_order_no || '',
+      storage_type: card.storage_type || '',
+      remarks: card.remarks || '',
+      other_work: card.other_work || '',
+      invoice_number: card.invoice_number || '',
+      storage_building: card.storage_building || '',
+      storage_row: card.storage_row || '',
+      storage_col: card.storage_col || '',
+      boathouse_no: card.boathouse_no || '',
+      slip_no: card.slip_no || '',
+    }
+    const changed = Object.keys(initial).some(k => form[k] !== initial[k])
+    setDirty(changed)
+    return () => setDirty(false)
+  }, [editing, form, card, setDirty])
+
   const save = async () => {
     try {
       await api('PUT', `/cards/${card.id}`, form)
+      setDirty(false)
       showToast('Saved')
       setEditing(false)
       reload()
@@ -76,7 +96,10 @@ function InfoTab({ card, reload }) {
         <div className="card-pad">
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'Bebas Neue', fontSize: 20, letterSpacing: 1, color: 'var(--text)', marginBottom: 4 }}>{card.customer_name}</div>
+              <div style={{ fontFamily: 'Bebas Neue', fontSize: 20, letterSpacing: 1, color: 'var(--text)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {card.customer_name}
+                {card.is_fake && <span style={{ background: '#c0392b', color: '#fff', fontSize: 10, fontFamily: 'Barlow Condensed', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: 0.5 }}>FAKE DATA</span>}
+              </div>
               {card.address && <div style={{ fontSize: 13, color: 'var(--text2)' }}>{card.address}, {card.city} {card.postal_code}</div>}
               {card.customer_phone && (
                 <a href={`tel:${card.customer_phone}`} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, color: 'var(--accent)', fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
@@ -84,10 +107,10 @@ function InfoTab({ card, reload }) {
                 </a>
               )}
             </div>
-            {card.customer_token && (
+            {card.customer_token && card.work_order_no && (
               <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }} onClick={() => window.open(`${window.location.origin}/?wo=${card.customer_token}`, '_blank')}>
                 <QrCode value={`${window.location.origin}/?wo=${card.customer_token}`} size={80} />
-                <span style={{ fontSize: 10, fontFamily: 'Barlow Condensed', fontWeight: 700, color: 'var(--text3)', letterSpacing: 0.5 }}>WO#</span>
+                <span style={{ fontSize: 10, fontFamily: 'Barlow Condensed', fontWeight: 700, color: 'var(--text3)', letterSpacing: 0.5 }}>{card.work_order_no}</span>
               </div>
             )}
           </div>
@@ -121,7 +144,7 @@ function InfoTab({ card, reload }) {
       <div className="section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
         <span>Service Info</span>
         {(employee?.role === 'admin' || employee?.role === 'office') && (
-          <button className="btn btn-outline btn-sm" style={{ width: 'auto', padding: '5px 12px' }} onClick={() => setEditing(!editing)}>
+          <button className="btn btn-outline btn-sm" style={{ width: 'auto', padding: '5px 12px' }} onClick={() => { if (editing) setDirty(false); setEditing(!editing) }}>
             <Icon name="edit" size={14} /> {editing ? 'Cancel' : 'Edit'}
           </button>
         )}
@@ -508,7 +531,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
     completedItems.forEach(w => {
       const tmpl = tmplService.find(t => t.item_key === w.service_type)
       const price = tmpl?.unit_price || 0
-      newItems.push({ description: `Service: ${w.service_type}`, quantity: 1, unit_price: price })
+      newItems.push({ description: `Service: ${tmpl?.label || w.service_type}`, quantity: 1, unit_price: price })
       try {
         const products = typeof w.products_used === 'string' ? JSON.parse(w.products_used) : (w.products_used || [])
         if (Array.isArray(products)) {
@@ -654,7 +677,7 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
     completedItems.forEach(w => {
       const tmpl = (templates || []).find(t => t.item_key === w.service_type)
       const price = tmpl?.unit_price || 0
-      newItems.push({ description: `Cleaning: ${w.service_type}`, quantity: 1, unit_price: price })
+      newItems.push({ description: `Cleaning: ${tmpl?.label || w.service_type}`, quantity: 1, unit_price: price })
       try {
         const products = typeof w.products_used === 'string' ? JSON.parse(w.products_used) : (w.products_used || [])
         if (Array.isArray(products)) {
@@ -1220,21 +1243,41 @@ function PhotosTab({ card, reload }) {
 function InvoiceTab({ card, reload }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
+  const { setDirty } = useContext(NavCtx)
   const [items, setItems] = useState([])
   const [invoiceStatus, setInvoiceStatus] = useState(card.invoice_status || 'draft')
   const [invoiceNumber, setInvoiceNumber] = useState(card.invoice_number || '')
   const [taxRate, setTaxRate] = useState(card.tax_rate || 13)
   const [loading, setLoading] = useState(true)
+  const initialRef = useRef(null)
 
   useEffect(() => {
     api('GET', `/cards/${card.id}/invoice`).then(data => {
-      setItems((data.items || []).map(i => ({ ...i, product: null })))
+      const loadedItems = (data.items || []).map(i => ({ ...i, product: null }))
+      setItems(loadedItems)
       setInvoiceStatus(data.invoice_status || 'draft')
-      setInvoiceNumber(data.invoice_number || '')
       setTaxRate(data.tax_rate || 13)
+      if (data.invoice_number) {
+        setInvoiceNumber(data.invoice_number)
+        initialRef.current = { items: loadedItems, invoiceNumber: data.invoice_number, taxRate: data.tax_rate || 13, invoiceStatus: data.invoice_status || 'draft' }
+      } else {
+        api('GET', '/next-invoice-number').then(next => {
+          setInvoiceNumber(next.invoice_number)
+          initialRef.current = { items: loadedItems, invoiceNumber: next.invoice_number, taxRate: data.tax_rate || 13, invoiceStatus: data.invoice_status || 'draft' }
+        }).catch(() => {})
+      }
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [card.id])
+
+  useEffect(() => {
+    if (!initialRef.current || loading) return
+    const init = initialRef.current
+    const itemsChanged = JSON.stringify(items.map(i => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price }))) !== JSON.stringify(init.items.map(i => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price })))
+    const changed = itemsChanged || invoiceNumber !== init.invoiceNumber || taxRate !== init.taxRate
+    setDirty(changed)
+    return () => setDirty(false)
+  }, [items, invoiceNumber, taxRate, loading, setDirty])
 
   const addItem = () => {
     setItems([...items, { description: '', quantity: 1, unit_price: 0, total: 0, product: null }])
@@ -1267,6 +1310,8 @@ function InvoiceTab({ card, reload }) {
         tax_rate: taxRate,
         items: items.map(i => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price })),
       })
+      initialRef.current = { items, invoiceNumber, taxRate, invoiceStatus }
+      setDirty(false)
       showToast('Invoice saved')
       reload()
     } catch (e) { showToast('Save failed') }

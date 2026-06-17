@@ -73,7 +73,10 @@ export default function CustomerDetailScreen({ params = {} }) {
               <div key={c.id} onClick={() => navigate('card', { id: c.id })} style={{ padding: '12px 16px', borderBottom: i < filteredCards.length - 1 ? '1px solid var(--border)' : 'none', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                 <div style={{ width: 4, height: 32, borderRadius: 2, background: cfg.color, flexShrink: 0, marginRight: 12 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: 'Bebas Neue', fontSize: 16, letterSpacing: 1, color: 'var(--text)' }}>{c.boat_name} {'\u00B7'} {c.season_year}</div>
+                  <div style={{ fontFamily: 'Bebas Neue', fontSize: 16, letterSpacing: 1, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {c.boat_name} {'\u00B7'} {c.season_year}
+                    {c.is_fake && <span style={{ background: '#c0392b', color: '#fff', fontSize: 9, fontFamily: 'Barlow Condensed', fontWeight: 700, padding: '1px 5px', borderRadius: 3, letterSpacing: 0.5 }}>FAKE</span>}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2, fontFamily: 'Barlow Condensed', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>{c.work_order_no} {'\u00B7'} {cfg.label}</div>
                 </div>
               </div>

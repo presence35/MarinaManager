@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { STATUS_CONFIG, STORAGE_TYPES } from '../constants'
+import { STATUS_CONFIG, STORAGE_TYPES, AUTHORIZED_WORK, CLEANING_ITEMS } from '../constants'
 
 const STATUS_ORDER_FULL = ['intake', 'fall_checklist', 'storage', 'service', 'cleaning', 'spring_checklist', 'ready', 'invoiced', 'archived']
 
@@ -30,16 +30,17 @@ function Timeline({ statusHistory }) {
   )
 }
 
-function InvoiceSection({ invoice }) {
+function InvoiceSection({ invoice, serviceLabelMap }) {
   if (!invoice || invoice.length === 0) return null
   const subtotal = invoice.reduce((s, i) => s + Number(i.total || 0), 0)
+  const formatDesc = (desc) => desc.replace(/^(Service|Cleaning):\s*(.+)$/, (_, prefix, key) => `${prefix}: ${serviceLabelMap[key] || key}`)
   return (
     <div style={{ margin: '10px 12px' }}>
       <div style={{ fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 8 }}>Invoice Items</div>
       <div className="card" style={{ padding: '12px 16px' }}>
         {invoice.map((i, idx) => (
           <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: idx < invoice.length - 1 ? '1px solid var(--border)' : 'none', fontSize: 13 }}>
-            <span>{i.description} {i.quantity > 1 ? `× ${i.quantity}` : ''}</span>
+            <span>{formatDesc(i.description)} {i.quantity > 1 ? `× ${i.quantity}` : ''}</span>
             <span style={{ fontWeight: 600 }}>${Number(i.total || 0).toFixed(2)}</span>
           </div>
         ))}
@@ -88,8 +89,12 @@ export default function CustomerViewScreen({ card: initialCard }) {
   const cfg = STATUS_CONFIG[card.status] || STATUS_CONFIG.intake
   const statusIdx = STATUS_ORDER_FULL.indexOf(card.status)
 
+  const serviceLabelMap = {}
+  AUTHORIZED_WORK.forEach(w => { serviceLabelMap[w.key] = w.label })
+  CLEANING_ITEMS.forEach(cat => cat.items.forEach(item => { serviceLabelMap[item.key] = item.label }))
+
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100dvh', paddingBottom: 30, fontFamily: 'Barlow, sans-serif' }}>
+    <div className="standalone-view" style={{ background: 'var(--bg)', paddingBottom: 30, fontFamily: 'Barlow, sans-serif' }}>
       <div style={{ background: 'var(--primary)', padding: '30px 20px 20px' }}>
         <div style={{ fontFamily: 'Bebas Neue', fontSize: 32, letterSpacing: 1.5, color: '#fff' }}>{card.boat_name}</div>
         <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 15, marginTop: 4 }}>{card.customer_name}</div>
@@ -151,14 +156,14 @@ export default function CustomerViewScreen({ card: initialCard }) {
                 <span style={{ width: 20, height: 20, borderRadius: '50%', background: w.completed ? 'var(--success)' : 'var(--surface2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
                   {w.completed ? <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>{'\u2713'}</span> : null}
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: w.completed ? 'var(--text3)' : 'var(--text)' }}>{w.service_type}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: w.completed ? 'var(--text3)' : 'var(--text)' }}>{serviceLabelMap[w.service_type] || w.service_type}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <InvoiceSection invoice={card.invoice} />
+      <InvoiceSection invoice={card.invoice} serviceLabelMap={serviceLabelMap} />
       <Timeline statusHistory={card.status_history} />
 
       <div style={{ textAlign: 'center', marginTop: 20, padding: '0 12px' }}>
