@@ -1,12 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import App from './App'
 
-const overlay = document.createElement('div')
-overlay.id = 'version-overlay'
-overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0a4f6e;color:#fff;font-family:Barlow,sans-serif;font-size:18px;letter-spacing:1px;'
-overlay.textContent = 'Updating app...'
-document.body.appendChild(overlay)
-
 async function checkVersion() {
   try {
     const res = await fetch('/api/version')
@@ -14,6 +8,10 @@ async function checkVersion() {
     const { version } = await res.json()
     const stored = localStorage.getItem('marina_app_version')
     if (stored && stored !== version) {
+      const overlay = document.createElement('div')
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0a4f6e;color:#fff;font-family:Barlow,sans-serif;font-size:18px;letter-spacing:1px;'
+      overlay.textContent = 'Updating app...'
+      document.body.appendChild(overlay)
       for (const key of Object.keys(localStorage)) {
         if (key.startsWith('marina_')) localStorage.removeItem(key)
       }
@@ -34,7 +32,6 @@ async function checkVersion() {
 }
 
 checkVersion().then(() => {
-  overlay.remove()
   const root = createRoot(document.getElementById('root'))
   root.render(<App />)
 })
