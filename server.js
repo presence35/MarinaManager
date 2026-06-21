@@ -130,7 +130,7 @@ module.exports = async function createApp() {
     console.error('  Build not found. Run "npm run build" first.');
     process.exit(1);
   }
-  app.use('/language', express.static(staticDir));
+  app.use(express.static(staticDir));
   app.use('/photos', express.static(PHOTOS_DIR));
 
   app.get('/_health/liveness', (req, res) => res.json({ status: 'ok' }));
@@ -838,9 +838,22 @@ module.exports = async function createApp() {
     archive.finalize();
   }));
 
-  app.get('/language*', (req, res) => {
-    res.sendFile(path.join(staticDir, 'index.html'));
-  });
+  app.get('/api/backups', requireAdmin, asyncHandler(async (req, res) => {
+    const BACKUP_DIR = path.join(__dirname, 'backup');
+    if (!fs.existsSync(BACKUP_DIR)) return res.json([]);
+    
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.endsWith('.sql'))
+      .sort()
+      .reverse()
+      .slice(0, 2)
+      .map(f => {
+        const stat = fs.statSync(path.join(BACKUP_DIR, f));
+        return { filename: f, date: f.replace('.sql', ''), size: stat.size };
+      });
+    
+    res.json(files);
+  }));
 
   app.get('*', (req, res) => {
     res.sendFile(path.join(staticDir, 'index.html'));

@@ -11,10 +11,20 @@ export default function SettingsScreen() {
   const { employee, logout } = useContext(AuthCtx)
   const { navigate } = useContext(NavCtx)
   const [version, setVersion] = useState('')
+  const [backups, setBackups] = useState([])
 
   useEffect(() => {
     fetch('/api/version').then(r => r.json()).then(d => setVersion(d.version)).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (employee?.role === 'admin') {
+      fetch('/api/backups', { headers: { Authorization: `Bearer ${getToken()}` } })
+        .then(r => r.json())
+        .then(data => setBackups(data))
+        .catch(() => {})
+    }
+  }, [employee])
 
   async function handleExport() {
     const res = await fetch('/api/export', { headers: { Authorization: `Bearer ${getToken()}` } })
@@ -91,6 +101,22 @@ export default function SettingsScreen() {
             <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Export Database (ZIP)</span>
             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
           </button>
+          {backups.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', padding: '8px 16px' }}>
+              <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
+                Recent Backups
+              </div>
+              {backups.map(b => (
+                <div key={b.filename} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontFamily: 'Barlow Condensed', fontSize: 13, color: 'var(--text2)' }}>
+                  <span style={{ color: 'var(--text3)', fontSize: 14 }}>{'\u{1F4C4}'}</span>
+                  <span>{b.filename}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
+                    {(b.size / 1024).toFixed(1)} KB
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
