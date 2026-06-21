@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const createDatabase = require('./db');
+const runBackup = require('./db/backup');
 
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -20,6 +21,8 @@ module.exports = async function createApp() {
 
   const db = await createDatabase();
   const pool = db.getPool();
+
+  await runBackup(db);
 
   try {
     await db.exec("ALTER TABLE service_cards ADD COLUMN is_fake INTEGER DEFAULT 0");
