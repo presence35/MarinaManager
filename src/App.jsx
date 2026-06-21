@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext, useCallback, useRef } from 'react'
 import { ThemeProvider } from './contexts/ThemeCtx'
 import { AuthCtx, AuthProvider } from './contexts/AuthCtx'
-import { ToastProvider } from './contexts/ToastCtx'
+import { ToastCtx, ToastProvider } from './contexts/ToastCtx'
 import { api, getToken } from './api'
 import LoginScreen from './screens/LoginScreen'
 import CustomerViewScreen from './screens/CustomerViewScreen'
@@ -9,9 +9,11 @@ import AppShell from './AppShell'
 
 function App() {
   const { employee, login } = useContext(AuthCtx)
+  const showToast = useContext(ToastCtx)
   const [installPrompt, setInstallPrompt] = useState(null)
   const [customerCard, setCustomerCard] = useState(null)
   const [customerLoading, setCustomerLoading] = useState(true)
+  const [pendingNotice, setPendingNotice] = useState(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -40,6 +42,20 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (pendingNotice && showToast) {
+      showToast(pendingNotice)
+      setPendingNotice(null)
+    }
+  }, [pendingNotice, showToast])
+
+  const handleLogin = (emp, loginData) => {
+    login(emp)
+    if (loginData && loginData.backup_notice) {
+      setPendingNotice(loginData.backup_notice)
+    }
+  }
+
+  useEffect(() => {
     if (employee && getToken()) {
       api('GET', '/auth/me')
         .then((emp) => { if (emp) login(emp) })
@@ -53,7 +69,7 @@ function App() {
   if (customerLoading) return null
   if (customerCard === 'error') return <CustomerViewScreen />
   if (customerCard) return <CustomerViewScreen card={customerCard} />
-  if (!employee) return <LoginScreen onLogin={login} />
+  if (!employee) return <LoginScreen onLogin={handleLogin} />
   return <AppShell />
 }
 

@@ -17,7 +17,7 @@ export default function LoginScreen({ onLogin }) {
         const data = await api('POST', '/auth/login', { pin: newPin })
         localStorage.setItem('marina_token', data.token)
         localStorage.setItem('marina_employee', JSON.stringify(data.employee))
-        onLogin(data.employee)
+        onLogin(data.employee, data)
       } catch (e) {
         setError('Wrong PIN')
         setPin('')

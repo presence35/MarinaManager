@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const createDatabase = require('./db');
 const runBackup = require('./db/backup');
+const { getBackupRanToday } = require('./db/backup');
 
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -182,7 +183,11 @@ module.exports = async function createApp() {
     if (!emp) return res.status(401).json({ error: 'Invalid PIN' });
     const token = crypto.randomBytes(32).toString('hex');
     await db.prepare('INSERT INTO device_tokens (token, employee_id) VALUES (?, ?)').run(token, emp.id);
-    res.json({ token, employee: { id: emp.id, name: emp.name, role: emp.role, initials: emp.initials } });
+    const response = { token, employee: { id: emp.id, name: emp.name, role: emp.role, initials: emp.initials } };
+    if (emp.role === 'admin' && getBackupRanToday()) {
+      response.backup_notice = 'Database backup completed';
+    }
+    res.json(response);
   }));
 
   app.post('/api/auth/logout', requireAuth, asyncHandler(async (req, res) => {

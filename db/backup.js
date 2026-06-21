@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
+let backupRanToday = false;
+
 module.exports = async function runBackup(db) {
   const BACKUP_DIR = path.join(__dirname, '..', 'backup');
   const dateStr = new Date().toISOString().split('T')[0];
@@ -49,5 +51,8 @@ module.exports = async function runBackup(db) {
   }
 
   fs.writeFileSync(backupFile, dump);
+  backupRanToday = true;
   console.log(`  Daily backup created: ${backupFile}`);
 };
+
+module.exports.getBackupRanToday = () => backupRanToday;
