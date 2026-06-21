@@ -15,6 +15,68 @@ import SwipeableTask from '../components/SwipeableTask'
 import QrCode from '../components/QrCode'
 import ProductAutocomplete from '../components/ProductAutocomplete'
 
+function isStageComplete(stage, card, cleanKeys) {
+  switch (stage) {
+    case 'intake': {
+      const allItemsReceived = (card.received_items || []).every(i => i.present)
+      const allConditionsRated = (card.condition || []).every(c => c.rating)
+      return allItemsReceived && allConditionsRated
+    }
+    case 'fall_checklist': {
+      const existing = (card.checklists || []).find(c => c.checklist_type === 'fall')
+      if (!existing) return false
+      try {
+        const items = JSON.parse(existing.items_json || '{}')
+        const allItems = FALL_CHECKLIST.flatMap(cat => cat.items)
+        return allItems.every(i => items[i.key] && (items[i.key] === true || (typeof items[i.key] === 'object' && items[i.key].rating)))
+      } catch { return false }
+    }
+    case 'storage': {
+      const existing = (card.checklists || []).find(c => c.checklist_type === 'storage')
+      if (!existing) return false
+      try {
+        const items = JSON.parse(existing.items_json || '{}')
+        const visibleGroups = STORAGE_CHECKLIST.filter(g => g.cat !== 'Wrapping' || card.wrap_required)
+        const allItems = visibleGroups.flatMap(cat => cat.items)
+        return allItems.every(i => items[i.key])
+      } catch { return false }
+    }
+    case 'spring_checklist': {
+      const existing = (card.checklists || []).find(c => c.checklist_type === 'spring')
+      if (!existing) return false
+      try {
+        const items = JSON.parse(existing.items_json || '{}')
+        const allItems = SPRING_CHECKLIST.flatMap(cat => cat.items)
+        return allItems.every(i => items[i.key] && (items[i.key] === true || (typeof items[i.key] === 'object' && items[i.key].rating)))
+      } catch { return false }
+    }
+    case 'service': {
+      const serviceWork = (card.authorized_work || []).filter(w => w.authorized && !cleanKeys.has(w.service_type))
+      return serviceWork.length > 0 && serviceWork.every(w => w.completed)
+    }
+    case 'cleaning': {
+      const cleaningWork = (card.authorized_work || []).filter(w => w.authorized && cleanKeys.has(w.service_type))
+      return cleaningWork.length > 0 && cleaningWork.every(w => w.completed)
+    }
+    case 'ready':
+    case 'invoiced':
+    case 'archived':
+      return true
+    default:
+      return false
+  }
+}
+
+function getStageStatus(stage, card, STATUS_ORDER, cleanKeys) {
+  const currentIdx = STATUS_ORDER.indexOf(card.status)
+  const stageIdx = STATUS_ORDER.indexOf(stage)
+
+  if (currentIdx > stageIdx) return 'completed'
+  if (currentIdx < stageIdx) return 'not_started'
+
+  return isStageComplete(stage, card, cleanKeys) ? 'completed' : 'pending'
+}
+
 async function addWorkItemToInvoice(cardId, workItem, prefix, templates) {
   const tmpl = (templates || []).find(t => t.item_key === workItem.service_type)
   const price = tmpl?.unit_price || 0
@@ -40,7 +102,7 @@ async function addWorkItemToInvoice(cardId, workItem, prefix, templates) {
   return newItems.length
 }
 
-function InfoTab({ card, reload }) {
+function InfoTab({ card, reload, canEdit = true }) {
   const showToast = useContext(ToastCtx)
   const { navigate, setDirty } = useContext(NavCtx)
   const { employee } = useContext(AuthCtx)
@@ -143,7 +205,7 @@ function InfoTab({ card, reload }) {
 
       <div className="section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
         <span>Service Info</span>
-        {(employee?.role === 'admin' || employee?.role === 'office') && (
+        {canEdit && (employee?.role === 'admin' || employee?.role === 'office') && (
           <button className="btn btn-outline btn-sm" style={{ width: 'auto', padding: '5px 12px' }} onClick={() => { if (editing) setDirty(false); setEditing(!editing) }}>
             <Icon name="edit" size={14} /> {editing ? 'Cancel' : 'Edit'}
           </button>
@@ -275,7 +337,9 @@ function InfoTab({ card, reload }) {
             const entry = (card.received_items || []).find((i) => i.item === ri.key) || {}
             return (
               <button key={ri.key} className={`chip ${entry.present ? 'on green' : ''}`}
+                disabled={!canEdit}
                 onClick={async () => {
+                  if (!canEdit) return
                   const items = (card.received_items || []).map(i => i.item === ri.key ? { ...i, present: i.present ? 0 : 1 } : i)
                   if (!items.find(i => i.item === ri.key)) items.push({ item: ri.key, present: 1, notes: '' })
                   try {
@@ -294,7 +358,7 @@ function InfoTab({ card, reload }) {
       <div className="card" style={{ margin: '0 12px 20px' }}>
         {CONDITIONS.map((c, i) => {
           const cond = card.condition?.find((x) => x.area === c.key) || {}
-          const isConditionLocked = card.status !== 'intake' && employee?.role !== 'admin' && employee?.role !== 'office'
+          const isConditionLocked = (card.status !== 'intake' && employee?.role !== 'admin' && employee?.role !== 'office') || !canEdit
           return (
             <div key={c.key} style={{ padding: '10px 16px', borderBottom: i < CONDITIONS.length - 1 ? '1px solid var(--border)' : 'none' }}>
               <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 6 }}>{c.label}</div>
@@ -307,13 +371,13 @@ function InfoTab({ card, reload }) {
   )
 }
 
-function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups, cleanKeys, authSet }) {
+function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups, cleanKeys, authSet, canEdit = true }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
   const [customTask, setCustomTask] = useState('')
 
-  const isReadOnly = employee?.role === 'mechanic' || employee?.role === 'wrapper' || employee?.role === 'cleaner'
+  const isReadOnly = !canEdit || employee?.role === 'mechanic' || employee?.role === 'wrapper' || employee?.role === 'cleaner'
 
   const toggleAuth = async (key) => {
     if (isReadOnly) return
@@ -407,7 +471,7 @@ function AuthorizedTab({ card, reload, serviceItems: tmplService, cleaningGroups
   )
 }
 
-function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroups, cleanKeys, authSet }) {
+function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroups, cleanKeys, authSet, canEdit = true }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
@@ -416,6 +480,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
   const fileRefs = useRef({})
 
   const toggle = async (key, field, value) => {
+    if (!canEdit) return
     const now = new Date().toISOString()
     const updated = work.map((w) => {
       if (w.service_type !== key) return w
@@ -647,7 +712,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
   )
 }
 
-function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates }) {
+function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates, canEdit = true }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const [work, setWork] = useState(card.authorized_work || [])
@@ -655,6 +720,7 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
   const [unwrapDone, setUnwrapDone] = useState(!!card.unwrap_done)
 
   const toggleUnwrap = async () => {
+    if (!canEdit) return
     const next = !unwrapDone
     setUnwrapDone(next)
     try {
@@ -695,6 +761,7 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
   }
 
   const toggle = async (key, field) => {
+    if (!canEdit) return
     const now = new Date().toISOString()
     const updated = work.map((w) => {
       if (w.service_type !== key) return w
@@ -850,7 +917,7 @@ function CleaningWorkTab({ card, reload, cleaningGroups, cleanKeys, templates })
     </div>
   )
 }
-function StorageTab({ card, reload }) {
+function StorageTab({ card, reload, canEdit = true }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const checklist = (card.checklists || []).find(c => c.checklist_type === 'storage')
@@ -863,6 +930,7 @@ function StorageTab({ card, reload }) {
   const allItems = visibleGroups.flatMap(cat => cat.items)
 
   const toggle = async (key) => {
+    if (!canEdit) return
     const updated = { ...items, [key]: items[key] ? false : true }
     try {
       await api('POST', `/cards/${card.id}/checklists`, { checklist_type: 'storage', items_json: JSON.stringify(updated) })
@@ -871,6 +939,7 @@ function StorageTab({ card, reload }) {
   }
 
   const setPickupDelivery = async (value) => {
+    if (!canEdit) return
     try {
       await api('PUT', `/cards/${card.id}`, { pickup_delivery: value })
       reload()
@@ -995,7 +1064,7 @@ function LogsTab({ card, reload }) {
   )
 }
 
-function ChecklistTab({ card, reload, checklistType }) {
+function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
   const showToast = useContext(ToastCtx)
   const { employee } = useContext(AuthCtx)
   const [activeList, setActiveList] = useState(checklistType || 'fall')
@@ -1022,6 +1091,7 @@ function ChecklistTab({ card, reload, checklistType }) {
   }, [items])
 
   const setRating = async (key, rating) => {
+    if (!canEdit) return
     const current = items[key] || {}
     const updated = {
       ...items,
@@ -1031,6 +1101,7 @@ function ChecklistTab({ card, reload, checklistType }) {
   }
 
   const setNote = async (key, note) => {
+    if (!canEdit) return
     setItemNotes({ ...itemNotes, [key]: note })
     const current = items[key] || {}
     const updated = {
@@ -1502,6 +1573,10 @@ export default function CardDetailScreen({ params = {} }) {
   const [saving, setSaving] = useState(false)
   const [templates, setTemplates] = useState([])
 
+  const isWorker = employee?.role === 'mechanic' || employee?.role === 'cleaner' || employee?.role === 'wrapper'
+  const isAssigned = params.isAssigned !== undefined ? params.isAssigned : true
+  const canEdit = !isWorker || isAssigned || employee?.role === 'admin' || employee?.role === 'office'
+
   const reload = useCallback(() => {
     api('GET', `/cards/${params.id}`).then(setCard).catch(() => {})
   }, [params.id])
@@ -1604,8 +1679,8 @@ export default function CardDetailScreen({ params = {} }) {
     return null
   }
 
-  const isFallStage = ['fall_checklist', 'storage', 'service', 'cleaning', 'spring_checklist'].includes(card.status)
-  const isSpringStage = ['spring_checklist', 'ready'].includes(card.status)
+  const isFallStage = ['fall_checklist', 'storage'].includes(card.status)
+  const isSpringStage = ['spring_checklist', 'service', 'cleaning'].includes(card.status)
   const isServiceStage = card.status === 'service'
   const isCleaningStage = card.status === 'cleaning'
   const isStorageStage = card.status === 'storage'
@@ -1645,25 +1720,36 @@ export default function CardDetailScreen({ params = {} }) {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, paddingBottom: 2 }}>
           {STATUS_ORDER.slice(0, -1).map((s, i) => {
-            const scfg = STATUS_CONFIG[s]
-            const past = STATUS_ORDER.indexOf(card.status) > i
-            const current = card.status === s
+            const stageStatus = getStageStatus(s, card, STATUS_ORDER, cleanKeys)
+            const colors = {
+              completed: '#2da84f',
+              pending: '#d64045',
+              not_started: '#5b9bd5'
+            }
+            const color = colors[stageStatus]
             return (
               <div key={s} onClick={() => statusClick(s)}
                 style={{
                   flexShrink: 0, padding: '4px 10px', borderRadius: 20,
                   fontFamily: 'Barlow Condensed', fontSize: 10, fontWeight: 700,
                   letterSpacing: 0.8, textTransform: 'uppercase', cursor: 'pointer',
-                  background: current ? '#fff' : past ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.1)',
-                  color: current ? cfg.color : past ? '#fff' : 'rgba(255,255,255,.5)',
-                  border: current ? 'none' : '1px solid rgba(255,255,255,.2)',
+                  background: stageStatus === 'completed' ? color : stageStatus === 'pending' ? color : 'rgba(255,255,255,.1)',
+                  color: stageStatus === 'not_started' ? 'rgba(255,255,255,.7)' : '#fff',
+                  border: stageStatus === 'not_started' ? '1px solid rgba(255,255,255,.3)' : 'none',
+                  opacity: stageStatus === 'not_started' ? 0.7 : 1,
                 }}>
-                {past && '\u2713 '}{scfg.label}
+                {stageStatus === 'completed' && '\u2713 '}{STATUS_CONFIG[s].label}
               </div>
             )
           })}
         </div>
       </div>
+
+      {isWorker && !isAssigned && (
+        <div style={{ padding: '10px 16px', background: 'var(--warn)', color: '#fff', fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', textAlign: 'center' }}>
+          {'\u{1F512}'} READ ONLY — Not assigned to you
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8, padding: '10px 12px' }}>
         {prevStatus && (
@@ -1737,13 +1823,13 @@ export default function CardDetailScreen({ params = {} }) {
         })}
       </div>
 
-      {tab === 'info' && <InfoTab card={card} reload={reload} />}
-      {tab === 'authorized' && <AuthorizedTab card={card} reload={reload} serviceItems={serviceItems} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} authSet={authSet} />}
-      {tab === 'fall_checklist' && <ChecklistTab card={card} reload={reload} checklistType="fall" />}
-      {tab === 'service_work' && <ServiceWorkTab card={card} reload={reload} serviceItems={serviceItems} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} authSet={authSet} />}
-      {tab === 'cleaning_work' && <CleaningWorkTab card={card} reload={reload} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} templates={templates} />}
-      {tab === 'spring_checklist' && <ChecklistTab card={card} reload={reload} checklistType="spring" />}
-      {tab === 'storage' && <StorageTab card={card} reload={reload} />}
+      {tab === 'info' && <InfoTab card={card} reload={reload} canEdit={canEdit} />}
+      {tab === 'authorized' && <AuthorizedTab card={card} reload={reload} serviceItems={serviceItems} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} authSet={authSet} canEdit={canEdit} />}
+      {tab === 'fall_checklist' && <ChecklistTab card={card} reload={reload} checklistType="fall" canEdit={canEdit} />}
+      {tab === 'service_work' && <ServiceWorkTab card={card} reload={reload} serviceItems={serviceItems} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} authSet={authSet} canEdit={canEdit} />}
+      {tab === 'cleaning_work' && <CleaningWorkTab card={card} reload={reload} cleaningGroups={cleaningGroups} cleanKeys={cleanKeys} templates={templates} canEdit={canEdit} />}
+      {tab === 'spring_checklist' && <ChecklistTab card={card} reload={reload} checklistType="spring" canEdit={canEdit} />}
+      {tab === 'storage' && <StorageTab card={card} reload={reload} canEdit={canEdit} />}
       {tab === 'invoice' && <InvoiceTab card={card} reload={reload} />}
       {tab === 'logs' && <LogsTab card={card} reload={reload} />}
       {tab === 'photos' && <PhotosTab card={card} reload={reload} />}

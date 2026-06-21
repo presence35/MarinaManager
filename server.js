@@ -516,6 +516,27 @@ module.exports = async function createApp() {
       await db.prepare('REPLACE INTO authorized_work (card_id, service_type, authorized, completed, notes, completed_by, completed_at, products_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null, completed_by || null, completed_at || null, productsJson);
     }
     await db.prepare('UPDATE service_cards SET updated_at = NOW() WHERE id=?').run(req.params.id);
+
+    const card = await db.prepare('SELECT boat_id, status FROM service_cards WHERE id = ?').get(req.params.id);
+    if (card) {
+      const allWork = await db.prepare('SELECT service_type, authorized, completed FROM authorized_work WHERE card_id = ?').all(req.params.id);
+      const templates = await db.prepare("SELECT item_key, category FROM service_item_templates WHERE active = 1").all();
+      const cleanKeys = new Set(templates.filter(t => t.category === 'cleaning').map(t => t.item_key));
+
+      const serviceWork = allWork.filter(w => w.authorized && !cleanKeys.has(w.service_type));
+      const cleaningWork = allWork.filter(w => w.authorized && cleanKeys.has(w.service_type));
+
+      const allServiceComplete = serviceWork.length > 0 && serviceWork.every(w => w.completed);
+      const allCleaningComplete = cleaningWork.length > 0 && cleaningWork.every(w => w.completed);
+
+      if (allServiceComplete && card.status === 'service') {
+        await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+      }
+      if (allCleaningComplete && card.status === 'cleaning') {
+        await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+      }
+    }
+
     res.json({ ok: true });
   }));
 
@@ -705,6 +726,21 @@ module.exports = async function createApp() {
     } else {
       const r = await db.prepare('INSERT INTO checklist_completions (card_id,checklist_type,employee_id,items_json,completed_at) VALUES (?,?,?,?,?)').run(req.params.id, checklist_type, req.employee.id, items_json, allDone ? new Date().toISOString() : null);
       res.json({ id: r.lastInsertRowid });
+    }
+
+    if (allDone) {
+      const card = await db.prepare('SELECT boat_id, status FROM service_cards WHERE id = ?').get(req.params.id);
+      if (card) {
+        if (checklist_type === 'fall' && card.status === 'fall_checklist') {
+          await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+        }
+        if (checklist_type === 'spring' && card.status === 'spring_checklist') {
+          await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+        }
+        if (checklist_type === 'storage' && card.status === 'storage') {
+          await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+        }
+      }
     }
   }));
 

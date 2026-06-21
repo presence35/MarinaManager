@@ -16,6 +16,7 @@ export default function CardsScreen({ params = {} }) {
   const [loading, setLoading] = useState(true)
   const [assignments, setAssignments] = useState([])
   const isAssignedWorker = employee?.role === 'mechanic' || employee?.role === 'cleaner'
+  const isAdminOrOffice = employee?.role === 'admin' || employee?.role === 'office'
 
   useEffect(() => {
     if (isAssignedWorker) {
@@ -112,8 +113,9 @@ export default function CardsScreen({ params = {} }) {
 
   function renderCard(card, isAssigned) {
     const cfg = STATUS_CONFIG[card.status] || STATUS_CONFIG.intake
+    const effectiveIsAssigned = isAdminOrOffice ? true : isAssigned
     return (
-      <div key={card.id} className="job-card" onClick={() => navigate('card', { id: card.id })} style={isAssigned ? { border: '2px solid var(--accent)', borderRadius: 'var(--r)', margin: '0 12px 8px' } : {}}>
+      <div key={card.id} className="job-card" onClick={() => navigate('card', { id: card.id, isAssigned: effectiveIsAssigned })} style={isAssigned ? { border: '2px solid var(--accent)', borderRadius: 'var(--r)', margin: '0 12px 8px' } : {}}>
         <div className="job-card-stripe" style={{ background: cfg.stripe }} />
         <div className="job-card-body">
           <div className="job-card-boat">{card.boat_name || '(no name)'}</div>

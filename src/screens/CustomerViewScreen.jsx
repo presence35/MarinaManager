@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { STATUS_CONFIG, STORAGE_TYPES, AUTHORIZED_WORK, CLEANING_ITEMS } from '../constants'
 
-const STATUS_ORDER_FULL = ['intake', 'fall_checklist', 'storage', 'service', 'cleaning', 'spring_checklist', 'ready', 'invoiced', 'archived']
+const STATUS_ORDER_FULL = ['intake', 'fall_checklist', 'storage', 'spring_checklist', 'service', 'cleaning', 'ready', 'invoiced', 'archived']
 
 function Timeline({ statusHistory }) {
   const sorted = [...(statusHistory || [])].sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at))
