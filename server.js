@@ -32,6 +32,13 @@ module.exports = async function createApp() {
     // Column already exists, ignore
   }
 
+  try {
+    await db.exec("ALTER TABLE service_cards ADD COLUMN is_scanned INTEGER DEFAULT 0");
+    console.log("  Added is_scanned column to service_cards");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   function generateCustomerToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let token = '';
@@ -371,11 +378,12 @@ module.exports = async function createApp() {
   `;
 
   app.get('/api/cards', requireAuth, asyncHandler(async (req, res) => {
-    const { status, season, q } = req.query;
+    const { status, season, q, scanned } = req.query;
     let where = 'WHERE 1=1';
     const params = [];
     if (status && status !== 'all') { where += ' AND sc.status = ?'; params.push(status); }
     if (season) { where += ' AND sc.season_year = ?'; params.push(season); }
+    if (scanned === '1') { where += ' AND sc.is_scanned = 1'; }
     if (q) { where += ' AND (c.name LIKE ? OR b.name LIKE ? OR sc.work_order_no LIKE ? OR b.licence LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
     res.json(await db.prepare(`${CARD_SELECT} ${where} ORDER BY sc.updated_at DESC`).all(...params));
   }));
@@ -414,7 +422,7 @@ module.exports = async function createApp() {
   const CONDITIONS = ['top', 'hull', 'upholstery', 'motor', 'propeller', 'lower_unit'];
 
   app.post('/api/cards', requireEditor, asyncHandler(async (req, res) => {
-    const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no, is_fake } = req.body;
+    const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no, is_fake, is_scanned } = req.body;
     if (!boat_id) return res.status(400).json({ error: 'Boat required' });
 
     let storage_location = null;
@@ -437,9 +445,9 @@ module.exports = async function createApp() {
     }
 
     const r = await db.prepare(`
-      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, storage_location, storage_building, storage_row, storage_col, boathouse_no, slip_no, wrap_required, remarks, other_work, date_in, created_by, customer_token, is_fake)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, storage_location, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id, customerToken, is_fake ? 1 : 0);
+      INSERT INTO service_cards (boat_id, season_year, work_order_no, storage_type, storage_location, storage_building, storage_row, storage_col, boathouse_no, slip_no, wrap_required, remarks, other_work, date_in, created_by, customer_token, is_fake, is_scanned)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(boat_id, season_year || new Date().getFullYear(), work_order_no || null, storage_type || null, storage_location, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required ? 1 : 0, remarks || null, other_work || null, date_in || new Date().toISOString().split('T')[0], req.employee.id, customerToken, is_fake ? 1 : 0, is_scanned ? 1 : 0);
     const cardId = r.lastInsertRowid;
 
     for (const item of RECEIVED_ITEMS) {
@@ -462,10 +470,10 @@ module.exports = async function createApp() {
     if (!card) return res.status(404).json({ error: 'Not found' });
 
     const isEditor = req.employee.role === 'admin' || req.employee.role === 'office';
-    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no, storage_building, storage_row, storage_col, boathouse_no, slip_no, pickup_delivery } = req.body;
+    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no, storage_building, storage_row, storage_col, boathouse_no, slip_no, pickup_delivery, is_scanned } = req.body;
 
     if (!isEditor) {
-       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no', 'storage_building', 'storage_row', 'storage_col', 'boathouse_no', 'slip_no', 'pickup_delivery'];
+       const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no', 'storage_building', 'storage_row', 'storage_col', 'boathouse_no', 'slip_no', 'pickup_delivery', 'is_scanned'];
        const hasProtected = protectedKeys.some(k => req.body[k] !== undefined);
        if (hasProtected) return res.status(403).json({ error: 'Only admin and office can edit relevant data' });
     }
@@ -500,8 +508,9 @@ module.exports = async function createApp() {
       date_out = COALESCE(?, date_out), invoice_number = COALESCE(?, invoice_number),
       work_order_no = COALESCE(?, work_order_no),
       pickup_delivery = COALESCE(?, pickup_delivery),
+      is_scanned = COALESCE(?, is_scanned),
       updated_at = NOW()
-      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, pickup_delivery ?? null, id);
+      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, pickup_delivery ?? null, is_scanned != null ? (is_scanned ? 1 : 0) : null, id);
     res.json({ ok: true });
   }));
 

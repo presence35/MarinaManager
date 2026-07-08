@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS service_cards (
   customer_token TEXT UNIQUE,
   pickup_delivery TEXT,
   is_fake INTEGER DEFAULT 0,
+  is_scanned INTEGER DEFAULT 0,
   updated_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (boat_id) REFERENCES boats(id),
   FOREIGN KEY (created_by) REFERENCES employees(id)

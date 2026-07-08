@@ -1751,6 +1751,24 @@ export default function CardDetailScreen({ params = {} }) {
         </div>
       )}
 
+      {card.is_scanned && (employee?.role === 'admin' || employee?.role === 'office') && (
+        <div style={{ padding: '10px 16px', background: '#e07b39', color: '#fff', fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <span>{'\u26A0\uFE0F'} OCR Scanned — Needs Verification</span>
+          <button
+            onClick={async () => {
+              try {
+                await api('PUT', `/cards/${card.id}`, { is_scanned: 0 })
+                showToast('Card verified')
+                reload()
+              } catch (e) { showToast('Failed to verify') }
+            }}
+            style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', padding: '4px 12px', borderRadius: 'var(--r3)', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 }}
+          >
+            Mark Verified
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, padding: '10px 12px' }}>
         {prevStatus && (
           <button className="btn btn-outline" onClick={retreatStatus} disabled={saving} style={{ flex: 1, minWidth: 0, opacity: saving ? 0.7 : 1 }}>

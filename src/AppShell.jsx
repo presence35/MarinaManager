@@ -13,6 +13,7 @@ import MapScreen from './screens/MapScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import AdminScreen from './screens/AdminScreen'
 import CustomerDetailScreen from './screens/CustomerDetailScreen'
+import ScanCardScanner from './components/ScanCardScanner'
 
 const NAV_ITEMS = [
   { key: 'cards', label: 'Cards', icon: 'id-card' },
@@ -106,6 +107,7 @@ export default function AppShell() {
       case 'settings': return <SettingsScreen />
       case 'admin': return <AdminScreen params={current.params} />
       case 'customer-detail': return <CustomerDetailScreen params={current.params} />
+      case 'scan-card': return <ScanCardScanner />
       default: return <CardsScreen />
     }
   }
