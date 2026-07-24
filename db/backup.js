@@ -22,7 +22,7 @@ module.exports = async function runBackup(db) {
 
   const pool = db.getPool();
   const [tables] = await pool.query(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    "SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME"
   );
 
   let dump = `-- Marina Manager backup ${new Date().toISOString()}\n\n`;
@@ -31,11 +31,11 @@ module.exports = async function runBackup(db) {
     const tableName = Object.values(tableRow)[0];
 
     const [createResult] = await pool.query(
-      `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`,
-      [tableName]
+      `SHOW CREATE TABLE \`${tableName}\``
     );
-    if (createResult[0] && createResult[0].sql) {
-      dump += createResult[0].sql + ';\n\n';
+    if (createResult[0]) {
+      const createSql = createResult[0]['Create Table'] || Object.values(createResult[0])[1];
+      dump += createSql + ';\n\n';
     }
 
     const [rows] = await pool.query(`SELECT * FROM \`${tableName}\``);
