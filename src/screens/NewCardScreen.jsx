@@ -86,7 +86,7 @@ export default function NewCardScreen({ params = {} }) {
     if (!newBoat.name && !newBoat.model) { showToast('Add boat name or model'); return }
     setSaving(true)
     try {
-      const b = await api('POST', '/boats', { ...newBoat, customer_id: customer.id })
+      const b = await api('POST', '/boats', { ...newBoat, customer_id: customer.id, length_ft: newBoat.length_ft ? parseFloat(newBoat.length_ft) : null })
       if (target === 'boat') { setDirty(false); showToast('Boat created'); goBack() }
       else { setBoat({ ...newBoat, id: b.id }); setStep('card'); setCreatingBoat(false) }
     } catch (e) { showToast(e.message || 'Failed to create boat') }

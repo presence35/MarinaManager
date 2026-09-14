@@ -39,6 +39,27 @@ module.exports = async function createApp() {
     // Column already exists, ignore
   }
 
+  try {
+    await db.exec("ALTER TABLE boats ADD COLUMN licence TEXT");
+    console.log("  Added licence column to boats");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  try {
+    await db.exec("ALTER TABLE boats ADD COLUMN trailer_licence TEXT");
+    console.log("  Added trailer_licence column to boats");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  try {
+    await db.exec("ALTER TABLE boats ADD COLUMN rate_type TEXT DEFAULT 'SW'");
+    console.log("  Added rate_type column to boats");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   function generateCustomerToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let token = '';
