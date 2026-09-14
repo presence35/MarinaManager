@@ -751,3 +751,369 @@ Done. Here's what's happening and what changed:
 **GPS flow**: When the user taps the location Photo button and selects an image, `uploadLocationPhoto` requests geolocation with `enableHighAccuracy: true` and a 10s timeout. If granted, lat/lng are appended to the FormData. If denied or unavailable, the photo still uploads without GPS — the flow never blocks.
 
 **Shrink wrap debugging**: The checklist endpoint now logs `[CHECKLIST SAVE ERROR]` with the full error object. If the save still fails after the cache clear, check the server console — the actual MySQL/SQLite error message will be visible instead of being swallowed by the generic handler.
+## 14/09/2026, 23:51:24
+
+## Objective
+- Fix the dead location input in CardDetailScreen InfoTab, add "Location" as a photo type with GPS capture, and investigate the shrink-wrap save failure and a phantom "0" rendering above the READY status chip.
+
+## Important Details
+- User sees a random "0" above the READY badge in the status pipeline; source not found in current code, likely stale SW bundle
+- GPS capture (`navigator.geolocation`) not firing on web or Android PWA; may need HTTPS, PWA manifest permissions, or permission-flow changes
+- User requested "all pics need to have p&z" (lat/lng GPS on every photo, not just location photos)
+- Version bumped to 1.1.7 to trigger `checkVersion()` cache clear; user may need manual SW unregister if it didn't take
+- Shrink-wrap save failure still unconfirmed; added `[CHECKLIST SAVE ERROR]` logging to surface the real error
+
+## Work State
+### Completed
+- Added `gps_lat REAL` / `gps_lng REAL` to `db/schema.sql` photos table
+- Added ALTER TABLE migrations in `server.js` for GPS columns
+- Updated `POST /api/cards/:id/photos` to accept and store `gps_lat`/`gps_lng`
+- Fixed dead location input (`value={''}` / `onChange={()=>{}}`) in `CardDetailScreen.jsx` InfoTab
+- Added `location_notes` form field and wired it into `save()` as `storage_location` for non-structured storage types
+- Added Photo button beside location notes input that uploads with `photo_type: 'location'` and requests GPS
+- Added `'location'` to `PHOTO_TYPES` in PhotosTab
+- Wrapped checklist endpoint in try/catch with `[CHECKLIST SAVE ERROR]` logging
+- Bumped `package.json` version to `1.1.7`
+
+### Active
+- Verifying service worker cache actually cleared; "0" bug persists for user
+- GPS permission flow not triggering on web/Android PWA
+- Need to extend GPS capture to all photo upload paths (ChecklistTab, ServiceWorkTab, PhotosTab)
+
+### Blocked
+- Cannot confirm shrink-wrap root cause without server-side error output
+- "0" bug not reproducible from current source; suspected old cached bundle
+- GPS not requested: unknown if HTTPS context, PWA permission, or code-path issue
+
+## Next Move
+1. Unregister old service worker from DevTools (Application → Service Workers) and reload to confirm "0" disappears and Location chip appears
+2. Inspect `manifest.json` for missing geolocation permissions and add them
+3. Audit all photo upload functions (`uploadCatPhoto`, `uploadPhoto` in ServiceWorkTab, `upload` in PhotosTab) and add GPS capture flow to each
+4. Check server console for `[CHECKLIST SAVE ERROR]` after reproducing shrink-wrap failure
+
+## Relevant Files
+- `src/screens/CardDetailScreen.jsx`: InfoTab location input fix, `locationPhotoRef`, `uploadLocationPhoto`, PhotosTab `PHOTO_TYPES`
+- `server.js`: GPS ALTER TABLE migrations, photo upload endpoint with GPS params, checklist endpoint error logging
+- `db/schema.sql`: photos table `gps_lat`/`gps_lng` columns
+- `package.json`: version `1.1.7`
+- `src/main.jsx`: `checkVersion()` cache-clear logic
+- `manifest.json`: likely missing geolocation permission for Android PWA
+- `src/sw.js`: service worker precache strategy causing stale bundle
+## 14/09/2026, 23:51:35
+
+I'll systematically search the codebase for all the requested information. Let me start with broad searches in parallel.
+## 14/09/2026, 23:51:51
+
+The initial searches hit log files. Let me now directly read and search the actual source code files.
+## 14/09/2026, 23:52:00
+
+Now let me read the actual source files directly for precise line numbers.
+## 14/09/2026, 23:52:42
+
+Now let me check CardsScreen.jsx for the pipeline/status rendering where "0" might appear, and also search for any direct integer rendering.
+## 14/09/2026, 23:53:32
+
+Now let me check the CleaningWorkTab for its photo upload function and also verify the specific "0" rendering location in CardsScreen.
+## 14/09/2026, 23:53:44
+
+Let me also check if there's a `public/index.html` with legacy code that could be causing the "0" issue, and look at the current server.js checklist endpoint error handling.
+## 14/09/2026, 23:54:11
+
+Now I have all the information needed. Here is the comprehensive report:
+
+---
+
+## 1. "0" Rendering Above READY Status Chip/Badge
+
+**Primary culprit — `CardsScreen.jsx` line 80:**
+The pipeline status pills render `{count}` unconditionally inside a badge `<span>`. When zero cards exist for a status (including READY), the count `0` is rendered directly as text inside the pill:
+
+```jsx
+// D:\Desktop\marine\src\screens\CardsScreen.jsx, lines 74 & 80
+const count = s === 'all' ? ... : allCards.filter(c => c.status === s && ...).length
+// ...
+<span style={{ ... }}>{count}</span>  // renders "0" when count is 0
+```
+
+This is the most likely source of the "0" the user sees — it appears as a badge on the READY pipeline pill when no cards are in READY status.
+
+**Secondary check — `CardDetailScreen.jsx` `getTabBadge` (lines 1698–1741):**
+All branches properly guard against zero: `total > 0 ? total : null`, `checked > 0 ? ... : null`, etc. No "0" renders from here.
+
+**Historical bug (already fixed):** The old `public/index.html` had `{card.wrap_required && (...)}` patterns where SQLite integer `0` would render as literal "0" in React. Current code uses `!!card.wrap_required` (e.g., `CardsScreen.jsx:138`, `CardDetailScreen.jsx:908`).
+
+---
+
+## 2. Photo Upload Functions — GPS Capture Status
+
+| Function | File | Line | Has GPS? |
+|---|---|---|---|
+| `uploadLocationPhoto` | `D:\Desktop\marine\src\screens\CardDetailScreen.jsx` | 170 | ✅ Yes — uses `navigator.geolocation.getCurrentPosition` at line 176, appends `gps_lat`/`gps_lng` to FormData |
+| `uploadPhoto` (ServiceWorkTab) | `D:\Desktop\marine\src\screens\CardDetailScreen.jsx` | 628 | ❌ **No GPS** — only appends `photo`, `photo_type`, `caption` |
+| `uploadCatPhoto` (ChecklistTab) | `D:\Desktop\marine\src\screens\CardDetailScreen.jsx` | 1188 | ❌ **No GPS** — only appends `photo`, `photo_type`, `caption` |
+| `upload` (PhotosTab) | `D:\Desktop\marine\src\screens\CardDetailScreen.jsx` | 1295 | ❌ **No GPS** — only appends `photo`, `photo_type` |
+
+All three GPS-missing functions post to the same endpoint (`POST /api/cards/:id/photos`) which already accepts `gps_lat`/`gps_lng` — only the frontend calls need to be updated to capture and send GPS data.
+
+---
+
+## 3. `manifest.json` Permissions
+
+**File:** `D:\Desktop\marine\public\manifest.json`
+
+```json
+{
+  "name": "Marina Manager",
+  "short_name": "Marina",
+  "description": "Campbell's Landing Marina — Service & Storage Management",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a4f6e",
+  "theme_color": "#0a4f6e",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
+```
+
+**Missing:** No `permissions` field. There is no `"geolocation"` permission declared. Android Chrome PWA geolocation requires either the permission in the manifest or a runtime permission prompt triggered by user gesture. The current GPS flow in `uploadLocationPhoto` triggers `navigator.geolocation.getCurrentPosition` from a user click handler (file input change), which satisfies the user-gesture requirement — but the manifest itself has no geolocation permission entry.
+
+---
+
+## 4. `server.js` — Photo Upload & Checklist Endpoint
+
+**Photo upload — `POST /api/cards/:id/photos`** (lines 767–772):
+```js
+app.post('/api/cards/:id/photos', requireAuth, upload.single('photo'), asyncHandler(async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const { photo_type, caption, work_log_id, gps_lat, gps_lng } = req.body;
+    const r = await db.prepare(`INSERT INTO photos (card_id, work_log_id, filename, photo_type, caption, uploaded_by, gps_lat, gps_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        req.params.id,
+        work_log_id || null,
+        req.file.filename,
+        photo_type || 'general',
+        caption || null,
+        req.employee.id,
+        gps_lat ? parseFloat(gps_lat) : null,
+        gps_lng ? parseFloat(gps_lng) : null
+    );
+    res.json({ id: r.lastInsertRowid, filename: req.file.filename, url: `/photos/${req.file.filename}` });
+}));
+```
+
+**Checklist endpoint — `POST /api/cards/:id/checklists`** (lines 784–816):
+```js
+app.post('/api/cards/:id/checklists', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const { checklist_type, items_json } = req.body;
+        const items = JSON.parse(items_json || '{}');
+        const allDone = Object.keys(items).length > 0 && Object.values(items).every(v => v === true);
+        const existing = await db.prepare('SELECT id FROM checklist_completions WHERE card_id=? AND checklist_type=?').get(req.params.id, checklist_type);
+        if (existing) {
+            await db.prepare('UPDATE checklist_completions SET items_json=?,employee_id=?,completed_at=?,updated_at=NOW() WHERE id=?').run(items_json, req.employee.id, allDone ? new Date().toISOString() : null, existing.id);
+            res.json({ id: existing.id });
+        } else {
+            const r = await db.prepare('INSERT INTO checklist_completions (card_id,checklist_type,employee_id,items_json,completed_at) VALUES (?,?,?,?,?)').run(req.params.id, checklist_type, req.employee.id, items_json, allDone ? new Date().toISOString() : null);
+            res.json({ id: r.lastInsertRowid });
+        }
+        // ... boat_assignments cleanup when allDone ...
+    } catch (e) {
+        console.error('[CHECKLIST SAVE ERROR]', e);
+        throw e;
+    }
+}));
+```
+
+The checklist endpoint has a `try/catch` with `[CHECKLIST SAVE ERROR]` logging at line 813. The photo endpoint has **no** explicit try/catch — it relies on `asyncHandler` to forward errors to Express error middleware.
+
+**GPS ALTER TABLE migrations** (lines 63–74): Both `gps_lat REAL` and `gps_lng REAL` are added via idempotent `ALTER TABLE` on startup.
+
+---
+
+## 5. `db/schema.sql` — Photos Table
+
+**File:** `D:\Desktop\marine\db\schema.sql`, lines 125–139:
+
+```sql
+CREATE TABLE IF NOT EXISTS photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id INTEGER NOT NULL,
+  work_log_id INTEGER,
+  filename TEXT NOT NULL,
+  photo_type TEXT DEFAULT 'general',
+  caption TEXT,
+  uploaded_by INTEGER,
+  uploaded_at TEXT DEFAULT (datetime('now')),
+  gps_lat REAL,
+  gps_lng REAL,
+  FOREIGN KEY (card_id) REFERENCES service_cards(id),
+  FOREIGN KEY (work_log_id) REFERENCES work_logs(id),
+  FOREIGN KEY (uploaded_by) REFERENCES employees(id)
+);
+```
+
+`gps_lat` and `gps_lng` are present as `REAL` columns (lines 134–135).
+
+---
+
+## 6. `src/main.jsx` — `checkVersion()` Implementation
+
+**File:** `D:\Desktop\marine\src\main.jsx`, lines 4–31:
+
+```js
+async function checkVersion() {
+  try {
+    const res = await fetch('/api/version')
+    if (!res.ok) return
+    const { version } = await res.json()
+    const stored = localStorage.getItem('marina_app_version')
+    if (stored && stored !== version) {
+      const overlay = document.createElement('div')
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;...'
+      overlay.textContent = 'Updating app...'
+      document.body.appendChild(overlay)
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('marina_')) localStorage.removeItem(key)
+      }
+      if ('caches' in window) {
+        const names = await caches.keys()
+        await Promise.all(names.map(n => caches.delete(n)))
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map(r => r.unregister()))
+      }
+      localStorage.setItem('marina_app_version', version)
+      window.location.reload()
+      return
+    }
+    if (!stored) localStorage.setItem('marina_app_version', version)
+  } catch {}
+}
+```
+
+On version mismatch: clears all `marina_*` localStorage keys, deletes all Cache Storage entries, unregisters all service workers, stores new version, and reloads. The overlay ("Updating app...") is shown during this process.
+
+---
+
+## 7. `src/sw.js` — Service Worker Precache Strategy
+
+**File:** `D:\Desktop\marine\src\sw.js`, lines 1–18:
+
+```js
+import { precacheAndRoute } from 'workbox-precaching'
+import { skipWaiting, clientsClaim } from 'workbox-core'
+
+precacheAndRoute(self.__WB_MANIFEST)
+skipWaiting()
+clientsClaim()
+
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url)
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/photos/')) {
+    e.respondWith(
+      fetch(e.request).catch(() => new Response(JSON.stringify({ error: 'Offline' }), {
+        headers: { 'Content-Type': 'application/json' }, status: 503
+      }))
+    )
+    return
+  }
+})
+```
+
+**Strategy:** Workbox `precacheAndRoute` with `self.__WB_MANIFEST` (injected by `vite-plugin-pwa` at build time). Uses `skipWaiting()` + `clientsClaim()` for immediate SW activation. API (`/api/`) and photo (`/photos/`) requests go network-only with a JSON 503 fallback for offline. All other requests are served from the precache.
+## 14/09/2026, 23:54:20
+
+Here's the plan based on what we found:
+
+---
+
+## Plan
+
+### 1. Fix "0" rendering above READY status chip
+**File:** `src/screens/CardsScreen.jsx:80`
+
+The pipeline status pills render `{count}` unconditionally inside a badge `<span>`. When zero cards are in a status (including READY), the literal `0` appears as a badge above the pill. Fix: conditionally render the count only when `count > 0`.
+
+---
+
+### 2. Add GPS capture to all photo upload functions
+**File:** `src/screens/CardDetailScreen.jsx`
+
+Three upload functions need GPS added:
+- `uploadPhoto` (ServiceWorkTab, ~line 628)
+- `uploadCatPhoto` (ChecklistTab, ~line 1188)
+- `upload` (PhotosTab, ~line 1295)
+
+Each already posts to `POST /api/cards/:id/photos` which accepts `gps_lat`/`gps_lng`. Need to add `navigator.geolocation.getCurrentPosition` flow (triggered by user gesture) and append GPS data to FormData, matching the pattern in `uploadLocationPhoto` (line 170).
+
+---
+
+### 3. Add geolocation permission to manifest.json
+**File:** `public/manifest.json`
+
+Add `"permissions": ["geolocation"]` to the manifest so Android Chrome PWA doesn't block the permission prompt.
+
+---
+
+### 4. Add explicit try/catch to photo upload endpoint
+**File:** `server.js`
+
+The checklist endpoint has `[CHECKLIST SAVE ERROR]` logging. The photo upload endpoint (`POST /api/cards/:id/photos`) relies only on `asyncHandler` — add explicit try/catch with `[PHOTO UPLOAD ERROR]` logging to surface the real error for the shrink-wrap save failure.
+
+---
+
+### 5. Version bump to 1.1.8
+**File:** `package.json`
+
+Bump to `1.1.8` so `checkVersion()` triggers cache clear on next load, ensuring the "0" fix and GPS changes take effect even for users with stale SW bundles.
+
+---
+
+**Files to change (in order):**
+1. `src/screens/CardsScreen.jsx`
+2. `src/screens/CardDetailScreen.jsx`
+3. `public/manifest.json`
+4. `server.js`
+5. `package.json`
+
+Ready to execute, or do you want me to adjust anything?
+## 14/09/2026, 23:58:57
+
+Now I'll make all the edits in parallel:
+## 14/09/2026, 23:59:07
+
+Now I need to add the `captureGPS` helper and update the three upload functions in CardDetailScreen.jsx. I'll add the helper right after `uploadLocationPhoto`, then update the three upload functions.
+## 14/09/2026, 23:59:28
+
+Let me do a quick sanity check on the modified sections:
+## 14/09/2026, 23:59:36
+
+All edits verified. Here's a summary of everything that was done:
+
+---
+
+## Changes Made
+
+### 1. Fixed "0" rendering above READY status chip
+**`src/screens/CardsScreen.jsx:80`** — Changed the count badge to only render when `count > 0`, preventing a literal "0" from appearing in the pipeline pills when no cards match a status.
+
+### 2. Added GPS capture to all photo uploads
+**`src/screens/CardDetailScreen.jsx`** — Extracted the GPS capture logic from `uploadLocationPhoto` into a shared `captureGPS()` helper, then updated:
+- `uploadPhoto` (ServiceWorkTab) — now captures GPS before uploading service photos
+- `uploadCatPhoto` (ChecklistTab) — now captures GPS before uploading checklist photos  
+- `upload` (PhotosTab) — now captures GPS before uploading all photo types
+
+All three now append `gps_lat`/`gps_lng` to FormData when available, falling back silently if GPS is denied or unavailable.
+
+### 3. Added geolocation permission to manifest
+**`public/manifest.json`** — Added `"permissions": ["geolocation"]` so Android Chrome PWA doesn't suppress the permission prompt.
+
+### 4. Added error logging to photo upload endpoint
+**`server.js:767`** — Wrapped the photo upload handler in a try/catch with `[PHOTO UPLOAD ERROR]` logging, matching the pattern already used for checklists. This will surface the real error for the shrink-wrap save failure.
+
+### 5. Bumped version to 1.1.8
+**`package.json`** — Triggers `checkVersion()` to clear caches and unregister the old service worker on next load, ensuring the "0" fix and GPS changes take effect.

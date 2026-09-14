@@ -765,10 +765,15 @@ module.exports = async function createApp() {
   }));
 
   app.post('/api/cards/:id/photos', requireAuth, upload.single('photo'), asyncHandler(async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const { photo_type, caption, work_log_id, gps_lat, gps_lng } = req.body;
-    const r = await db.prepare(`INSERT INTO photos (card_id, work_log_id, filename, photo_type, caption, uploaded_by, gps_lat, gps_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(req.params.id, work_log_id || null, req.file.filename, photo_type || 'general', caption || null, req.employee.id, gps_lat ? parseFloat(gps_lat) : null, gps_lng ? parseFloat(gps_lng) : null);
-    res.json({ id: r.lastInsertRowid, filename: req.file.filename, url: `/photos/${req.file.filename}` });
+    try {
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+      const { photo_type, caption, work_log_id, gps_lat, gps_lng } = req.body;
+      const r = await db.prepare(`INSERT INTO photos (card_id, work_log_id, filename, photo_type, caption, uploaded_by, gps_lat, gps_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(req.params.id, work_log_id || null, req.file.filename, photo_type || 'general', caption || null, req.employee.id, gps_lat ? parseFloat(gps_lat) : null, gps_lng ? parseFloat(gps_lng) : null);
+      res.json({ id: r.lastInsertRowid, filename: req.file.filename, url: `/photos/${req.file.filename}` });
+    } catch (e) {
+      console.error('[PHOTO UPLOAD ERROR]', e);
+      throw e;
+    }
   }));
 
   app.delete('/api/photos/:id', requireAuth, asyncHandler(async (req, res) => {

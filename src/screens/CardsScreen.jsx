@@ -77,7 +77,7 @@ export default function CardsScreen({ params = {} }) {
               style={{ background: isActive ? cfg.color : 'transparent', borderColor: isActive ? cfg.color : 'var(--border)', color: isActive ? '#fff' : cfg.color, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               onClick={() => s === 'fake' ? setShowFake(!showFake) : s === 'scanned' ? setShowScanned(!showScanned) : setFilter(s)}>
               <span>{cfg.label}</span>
-              <span style={{ background: isActive ? 'rgba(255,255,255,0.2)' : 'var(--surface2)', color: isActive ? '#fff' : 'var(--text2)', padding: '2px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>{count}</span>
+              {count > 0 && <span style={{ background: isActive ? 'rgba(255,255,255,0.2)' : 'var(--surface2)', color: isActive ? '#fff' : 'var(--text2)', padding: '2px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>{count}</span>}
             </button>
           )
         })}

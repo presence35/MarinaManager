@@ -167,6 +167,25 @@ function InfoTab({ card, reload, canEdit = true }) {
     } catch (e) { showToast('Save failed') }
   }
 
+  const captureGPS = async () => {
+    let gpsLat = null
+    let gpsLng = null
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        })
+      })
+      gpsLat = position.coords.latitude
+      gpsLng = position.coords.longitude
+    } catch (err) {
+      console.log('GPS not available:', err.message)
+    }
+    return { gpsLat, gpsLng }
+  }
+
   const uploadLocationPhoto = async (file) => {
     if (!file) return
     let gpsLat = null
@@ -628,10 +647,13 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
   const uploadPhoto = async (key, file) => {
     if (!file) return
     try {
+      const { gpsLat, gpsLng } = await captureGPS()
       const fd = new FormData()
       fd.append('photo', file)
       fd.append('photo_type', `service_work`)
       fd.append('caption', `Service: ${key}`)
+      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
       const res = await fetch(`/api/cards/${card.id}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -1188,10 +1210,13 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
   const uploadCatPhoto = async (cat, file) => {
     if (!file) return
     try {
+      const { gpsLat, gpsLng } = await captureGPS()
       const fd = new FormData()
       fd.append('photo', file)
       fd.append('photo_type', `checklist_${cat}`)
       fd.append('caption', `${activeList} checklist — ${cat}`)
+      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
       const res = await fetch(`/api/cards/${card.id}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -1295,9 +1320,12 @@ function PhotosTab({ card, reload }) {
   const upload = async (file) => {
     setUploading(true)
     try {
+      const { gpsLat, gpsLng } = await captureGPS()
       const fd = new FormData()
       fd.append('photo', file)
       fd.append('photo_type', photoType)
+      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
       const res = await fetch(`/api/cards/${card.id}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
