@@ -69,3 +69,12 @@ cotninue
 ## 14/09/2026, 23:25:17
 
 also, add GPS data to the pic, so you'll have to request it from the user in a best practises way.  do it after these changes, but make note
+## 14/09/2026, 23:35:24
+
+i hard refreshed twice, but no Location on photos
+## 14/09/2026, 23:37:30
+
+i restarted the server.  still nothing.  also, what's that random 0 above "ready"?
+## 14/09/2026, 23:38:50
+
+go
