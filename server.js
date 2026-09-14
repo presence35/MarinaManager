@@ -60,6 +60,20 @@ module.exports = async function createApp() {
     // Column already exists, ignore
   }
 
+  try {
+    await db.exec("ALTER TABLE photos ADD COLUMN gps_lat REAL");
+    console.log("  Added gps_lat column to photos");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  try {
+    await db.exec("ALTER TABLE photos ADD COLUMN gps_lng REAL");
+    console.log("  Added gps_lng column to photos");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   function generateCustomerToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let token = '';
@@ -752,8 +766,8 @@ module.exports = async function createApp() {
 
   app.post('/api/cards/:id/photos', requireAuth, upload.single('photo'), asyncHandler(async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const { photo_type, caption, work_log_id } = req.body;
-    const r = await db.prepare(`INSERT INTO photos (card_id, work_log_id, filename, photo_type, caption, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)`).run(req.params.id, work_log_id || null, req.file.filename, photo_type || 'general', caption || null, req.employee.id);
+    const { photo_type, caption, work_log_id, gps_lat, gps_lng } = req.body;
+    const r = await db.prepare(`INSERT INTO photos (card_id, work_log_id, filename, photo_type, caption, uploaded_by, gps_lat, gps_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(req.params.id, work_log_id || null, req.file.filename, photo_type || 'general', caption || null, req.employee.id, gps_lat ? parseFloat(gps_lat) : null, gps_lng ? parseFloat(gps_lng) : null);
     res.json({ id: r.lastInsertRowid, filename: req.file.filename, url: `/photos/${req.file.filename}` });
   }));
 
@@ -768,31 +782,36 @@ module.exports = async function createApp() {
   }));
 
   app.post('/api/cards/:id/checklists', requireAuth, asyncHandler(async (req, res) => {
-    const { checklist_type, items_json } = req.body;
-    const items = JSON.parse(items_json || '{}');
-    const allDone = Object.keys(items).length > 0 && Object.values(items).every(v => v === true);
-    const existing = await db.prepare('SELECT id FROM checklist_completions WHERE card_id=? AND checklist_type=?').get(req.params.id, checklist_type);
-    if (existing) {
-      await db.prepare('UPDATE checklist_completions SET items_json=?,employee_id=?,completed_at=?,updated_at=NOW() WHERE id=?').run(items_json, req.employee.id, allDone ? new Date().toISOString() : null, existing.id);
-      res.json({ id: existing.id });
-    } else {
-      const r = await db.prepare('INSERT INTO checklist_completions (card_id,checklist_type,employee_id,items_json,completed_at) VALUES (?,?,?,?,?)').run(req.params.id, checklist_type, req.employee.id, items_json, allDone ? new Date().toISOString() : null);
-      res.json({ id: r.lastInsertRowid });
-    }
+    try {
+      const { checklist_type, items_json } = req.body;
+      const items = JSON.parse(items_json || '{}');
+      const allDone = Object.keys(items).length > 0 && Object.values(items).every(v => v === true);
+      const existing = await db.prepare('SELECT id FROM checklist_completions WHERE card_id=? AND checklist_type=?').get(req.params.id, checklist_type);
+      if (existing) {
+        await db.prepare('UPDATE checklist_completions SET items_json=?,employee_id=?,completed_at=?,updated_at=NOW() WHERE id=?').run(items_json, req.employee.id, allDone ? new Date().toISOString() : null, existing.id);
+        res.json({ id: existing.id });
+      } else {
+        const r = await db.prepare('INSERT INTO checklist_completions (card_id,checklist_type,employee_id,items_json,completed_at) VALUES (?,?,?,?,?)').run(req.params.id, checklist_type, req.employee.id, items_json, allDone ? new Date().toISOString() : null);
+        res.json({ id: r.lastInsertRowid });
+      }
 
-    if (allDone) {
-      const card = await db.prepare('SELECT boat_id, status FROM service_cards WHERE id = ?').get(req.params.id);
-      if (card) {
-        if (checklist_type === 'fall' && card.status === 'fall_checklist') {
-          await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
-        }
-        if (checklist_type === 'spring' && card.status === 'spring_checklist') {
-          await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
-        }
-        if (checklist_type === 'storage' && card.status === 'storage') {
-          await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+      if (allDone) {
+        const card = await db.prepare('SELECT boat_id, status FROM service_cards WHERE id = ?').get(req.params.id);
+        if (card) {
+          if (checklist_type === 'fall' && card.status === 'fall_checklist') {
+            await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+          }
+          if (checklist_type === 'spring' && card.status === 'spring_checklist') {
+            await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+          }
+          if (checklist_type === 'storage' && card.status === 'storage') {
+            await db.prepare('DELETE FROM boat_assignments WHERE boat_id = ? AND employee_id = ?').run(card.boat_id, req.employee.id);
+          }
         }
       }
+    } catch (e) {
+      console.error('[CHECKLIST SAVE ERROR]', e);
+      throw e;
     }
   }));
 

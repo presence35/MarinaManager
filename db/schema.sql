@@ -131,6 +131,8 @@ CREATE TABLE IF NOT EXISTS photos (
   caption TEXT,
   uploaded_by INTEGER,
   uploaded_at TEXT DEFAULT (datetime('now')),
+  gps_lat REAL,
+  gps_lng REAL,
   FOREIGN KEY (card_id) REFERENCES service_cards(id),
   FOREIGN KEY (work_log_id) REFERENCES work_logs(id),
   FOREIGN KEY (uploaded_by) REFERENCES employees(id)

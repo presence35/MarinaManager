@@ -107,6 +107,7 @@ function InfoTab({ card, reload, canEdit = true }) {
   const { navigate, setDirty } = useContext(NavCtx)
   const { employee } = useContext(AuthCtx)
   const [editing, setEditing] = useState(false)
+  const locationPhotoRef = useRef(null)
   const [form, setForm] = useState({
     work_order_no: card.work_order_no || '',
     storage_type: card.storage_type || '',
@@ -118,6 +119,7 @@ function InfoTab({ card, reload, canEdit = true }) {
     storage_col: card.storage_col || '',
     boathouse_no: card.boathouse_no || '',
     slip_no: card.slip_no || '',
+    location_notes: '',
   })
 
   useEffect(() => {
@@ -133,6 +135,7 @@ function InfoTab({ card, reload, canEdit = true }) {
       storage_col: card.storage_col || '',
       boathouse_no: card.boathouse_no || '',
       slip_no: card.slip_no || '',
+      location_notes: '',
     }
     const changed = Object.keys(initial).some(k => form[k] !== initial[k])
     setDirty(changed)
@@ -140,13 +143,63 @@ function InfoTab({ card, reload, canEdit = true }) {
   }, [editing, form, card, setDirty])
 
   const save = async () => {
+    let storage_location = null
+    if (form.storage_type === 'storage_building' && (form.storage_building || form.storage_row || form.storage_col)) {
+      const parts = []
+      if (form.storage_building) parts.push(form.storage_building)
+      if (form.storage_row) parts.push('Row ' + form.storage_row)
+      if (form.storage_col) parts.push('Column ' + form.storage_col)
+      storage_location = parts.join(', ')
+    } else if ((form.storage_type === 'marina_boathouse' || form.storage_type === 'customer_boathouse') && (form.boathouse_no || form.slip_no)) {
+      const parts = []
+      if (form.boathouse_no) parts.push('Boathouse ' + form.boathouse_no)
+      if (form.slip_no) parts.push('Slip ' + form.slip_no)
+      storage_location = parts.join(', ')
+    } else {
+      storage_location = form.location_notes || null
+    }
     try {
-      await api('PUT', `/cards/${card.id}`, form)
+      await api('PUT', `/cards/${card.id}`, { ...form, storage_location })
       setDirty(false)
       showToast('Saved')
       setEditing(false)
       reload()
     } catch (e) { showToast('Save failed') }
+  }
+
+  const uploadLocationPhoto = async (file) => {
+    if (!file) return
+    let gpsLat = null
+    let gpsLng = null
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        })
+      })
+      gpsLat = position.coords.latitude
+      gpsLng = position.coords.longitude
+    } catch (err) {
+      console.log('GPS not available:', err.message)
+    }
+    try {
+      const fd = new FormData()
+      fd.append('photo', file)
+      fd.append('photo_type', 'location')
+      fd.append('caption', `Location: ${form.location_notes || card.storage_location || 'Storage location'}`)
+      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
+      const res = await fetch(`/api/cards/${card.id}/photos`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: fd,
+      })
+      if (!res.ok) throw new Error()
+      showToast('Location photo uploaded')
+      reload()
+    } catch (e) { showToast('Upload failed') }
   }
 
   return (
@@ -232,8 +285,7 @@ function InfoTab({ card, reload, canEdit = true }) {
                 <button key={st.key} className={`chip ${form.storage_type === st.key ? 'on' : ''}`}
                   onClick={() => {
                     const newType = form.storage_type === st.key ? '' : st.key
-                    const upd = { ...form, storage_type: newType, storage_building: '', storage_row: '', storage_col: '', boathouse_no: '', slip_no: '' }
-
+                    const upd = { ...form, storage_type: newType, storage_building: '', storage_row: '', storage_col: '', boathouse_no: '', slip_no: '', location_notes: '' }
                     setForm(upd)
                   }}>
                   {st.icon} {st.label}
@@ -283,8 +335,17 @@ function InfoTab({ card, reload, canEdit = true }) {
                 </div>
               )}
               {!['customer_boathouse', 'marina_boathouse', 'storage_building'].includes(form.storage_type) && form.storage_type && (
-                <input placeholder="Location notes (optional)" style={{ width: '100%', background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
-                  value={''} onChange={() => {}} />
+                <div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    <input placeholder="Location notes (optional)" style={{ flex: 1, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
+                      value={form.location_notes} onChange={(e) => setForm({ ...form, location_notes: e.target.value })} />
+                    <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '3px 10px', whiteSpace: 'nowrap' }} onClick={() => locationPhotoRef.current?.click()}>
+                      <Icon name="camera" size={14} /> Photo
+                    </button>
+                  </div>
+                  <input ref={locationPhotoRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                    onChange={(e) => { if (e.target.files[0]) uploadLocationPhoto(e.target.files[0]); e.target.value = '' }} />
+                </div>
               )}
               {!form.storage_type && <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', padding: '6px 0' }}>Select a storage type above to configure location</div>}
             </div>
@@ -1258,7 +1319,7 @@ function PhotosTab({ card, reload }) {
     } catch (e) { showToast('Failed') }
   }
 
-  const PHOTO_TYPES = ['intake', 'damage', 'replacement', 'cleaning_complete', 'general']
+  const PHOTO_TYPES = ['intake', 'damage', 'replacement', 'cleaning_complete', 'location', 'general']
 
   return (
     <div>
