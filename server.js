@@ -325,10 +325,15 @@ module.exports = async function createApp() {
   }));
 
   app.post('/api/boats', requireEditor, asyncHandler(async (req, res) => {
-    const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
-    if (!customer_id) return res.status(400).json({ error: 'Customer required' });
-    const r = await db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft);
-    res.json({ id: r.lastInsertRowid });
+    try {
+      const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
+      if (!customer_id) return res.status(400).json({ error: 'Customer required' });
+      const r = await db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft);
+      res.json({ id: r.lastInsertRowid });
+    } catch (e) {
+      console.error('[BOAT CREATE ERROR]', e);
+      res.status(500).json({ error: e.message || 'Failed to create boat' });
+    }
   }));
 
   app.put('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
