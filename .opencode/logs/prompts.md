@@ -116,3 +116,69 @@ Be thorough - search for "READY", "status", "0", "upload", "photo", "gps", "geol
 ## 14/09/2026, 23:58:35
 
 go
+## 15/09/2026, 00:05:32
+
+i can't p&z pics
+## 15/09/2026, 00:05:42
+
+The user is saying they can't get GPS coordinates (p&z = position and zoom / lat and lng) on their photos. 
+
+Search the codebase thoroughly for:
+
+1. The current state of `captureGPS`, `uploadLocationPhoto`, `uploadPhoto`, `uploadCatPhoto`, and `upload` functions in CardDetailScreen.jsx - show the exact current code with line numbers
+2. Any console.error or error handling around navigator.geolocation
+3. How the file input onChange handlers call these upload functions - are they async? do they await? is there a race condition?
+4. Check if there are any try/catch blocks that silently swallow GPS errors before they reach the FormData
+5. Look at how the GPS data flows: captureGPS() -> upload function -> FormData -> fetch. Is there any place where GPS data could be lost?
+6. Check if there's a permission issue - look for any permission-related code, or HTTPS checks
+7. Check if the file input `capture="environment"` attribute might interfere with GPS on mobile
+8. Look for any console.log statements that might show what's happening
+
+Return the EXACT current code for each function, the file input handlers, and any error paths that could silently drop GPS data. Include line numbers for everything.
+## 15/09/2026, 00:06:40
+
+oh, i restared and refreshed bus till 1.1.6
+## 15/09/2026, 00:12:42
+
+godaddy's node rebuilds.  i just push to git and it does it all.  so that's not the issue.  i can't force close the node on godaddy, can you fix it another way?
+## 15/09/2026, 00:13:50
+
+both
+## 15/09/2026, 00:15:25
+
+it's 1.1.8 but i don't get gps request and the 0 is still there
+## 15/09/2026, 00:20:23
+
+i already unregietserd the sw.  i dunno how in PWA tho.  i did it again.  same issues.. no gps request, 0 sitll there, no p&z on pics.
+## 15/09/2026, 00:29:10
+
+go
+## 15/09/2026, 00:45:23
+
+error during build:Build failed with 1 error:
+
+[plugin vite-plugin-pwa:build]
+Error: Build failed with 1 error:
+
+[builtin:vite-transform] Expected a semicolon or an implicit semicolon after a statement, but found none
+     ╭─[ src/screens/CardDetailScreen.jsx:361:79 ]
+     │
+ 361 │                       if (result.gpsLat != null) showToast('Location updated') else showToast('GPS unavailable')
+     │                                                                               │
+     │                                                                               ╰─
+     │
+     │ Help: Try inserting a semicolon here
+─────╯
+    at aggregateBindingErrorsIntoJsError (file:///D:/Desktop/marine/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:48:18)
+    at plugin (file:///D:/Desktop/marine/node_modules/rolldown/dist/shared/bindingify-input-options-ClrST5Xx.mjs:1080:61)
+    at plugin.<computed> (file:///D:/Desktop/marine/node_modules/rolldown/dist/shared/bindingify-input-options-ClrST5Xx.mjs:1625:18)
+    at aggregateBindingErrorsIntoJsError (file:///D:/Desktop/marine/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:48:18)
+    at unwrapBindingResult (file:///D:/Desktop/marine/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:18:128)
+    at #build (file:///D:/Desktop/marine/node_modules/rolldown/dist/shared/rolldown-build-CrPk_lZe.mjs:3246:34)
+    at async buildEnvironment (file:///D:/Desktop/marine/node_modules/vite/dist/node/chunks/node.js:33253:64)
+    at async Object.build (file:///D:/Desktop/marine/node_modules/vite/dist/node/chunks/node.js:33675:19)
+    at async Object.buildApp (file:///D:/Desktop/marine/node_modules/vite/dist/node/chunks/node.js:33672:153)
+    at async CAC.<anonymous> (file:///D:/Desktop/marine/node_modules/vite/dist/node/cli.js:777:3) {
+  errors: [Getter/Setter]
+}
+PS D:\Desktop\marine>

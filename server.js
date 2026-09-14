@@ -846,7 +846,7 @@ module.exports = async function createApp() {
   }));
 
   app.get('/api/version', (req, res) => {
-    res.json({ version: require('./package.json').version });
+    res.json({ version: JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version });
   });
 
   app.get('/api/public/card/:token', asyncHandler(async (req, res) => {

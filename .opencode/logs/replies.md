@@ -1117,3 +1117,153 @@ All three now append `gps_lat`/`gps_lng` to FormData when available, falling bac
 
 ### 5. Bumped version to 1.1.8
 **`package.json`** — Triggers `checkVersion()` to clear caches and unregister the old service worker on next load, ensuring the "0" fix and GPS changes take effect.
+## 15/09/2026, 00:06:52
+
+Let me check the current state of the files to understand why GPS isn't working.
+## 15/09/2026, 00:07:59
+
+You're running **1.1.6** — the GPS code is in **1.1.8** but hasn't reached your device yet. Here's why and how to fix it:
+
+## Root Cause
+Your server serves the frontend from the `dist/` folder (a production build). The GPS capture code is in `src/` but **hasn't been compiled into `dist/`**, so the app your browser is running doesn't contain it. Also, the running Node process likely has the old `package.json` version cached in memory.
+
+## Fix (3 steps)
+
+1. **Rebuild the frontend:**
+   ```bash
+   npm run build
+   ```
+
+2. **Fully restart the server** (kill the process and start it again — a refresh isn't enough because Node caches `require()` results):
+   ```bash
+   node server.js
+   ```
+
+3. **Force-clear the service worker cache:**
+   - Open Chrome DevTools → **Application** tab → **Service Workers**
+   - Click **Unregister** on any marina entries
+   - Also clear **Cache Storage** from the same panel
+   - Reload the page
+
+After this, the Settings screen should show **v1.1.8**, and all photo uploads will attempt GPS capture.
+
+## If GPS still doesn't work after rebuilding
+Check the browser console for `GPS not available:` messages. Common blockers:
+- **Not on HTTPS** — geolocation requires HTTPS on web (localhost is exempt)
+- **Permission denied** — reset site permissions in Chrome Settings → Site Settings
+- **Indoor/no signal** — the 10-second timeout may expire before a fix
+## 15/09/2026, 00:13:00
+
+Good catch — on GoDaddy you can't restart Node, so the `require('./package.json')` cache is stuck at 1.1.6 until a restart. The browser never sees a version mismatch, so `checkVersion()` never clears the stale SW cache.
+
+## Fix: Make `/api/version` read from disk on every request
+
+Change `server.js` line 849 from:
+```js
+res.json({ version: require('./package.json').version });
+```
+to read the file fresh each time with `fs.readFileSync` — this bypasses Node's `require()` cache, so when GoDaddy deploys new files, the running process immediately serves the new version number without a restart.
+
+## Then the existing `checkVersion()` flow handles everything:
+1. You push to git → GoDaddy builds `dist/` and updates `package.json`
+2. Browser calls `/api/version` → gets 1.1.8 (from disk, not memory)
+3. `checkVersion()` sees `localStorage` has 1.1.6 → clears caches, unregisters SW, reloads
+4. New load fetches fresh `dist/` with GPS code
+
+## Question
+Should I make this one-line change to `server.js` only, or also keep the version bump in `package.json` at 1.1.8 so the mechanism triggers on the next deploy?
+## 15/09/2026, 00:14:06
+
+Both changes are in place:
+
+- **`server.js`** — `/api/version` now reads `package.json` fresh from disk on every request using `fs.readFileSync`, bypassing Node's `require()` cache
+- **`package.json`** — already at `1.1.8` from the earlier edit
+
+The deploy path on GoDaddy now works automatically: push → build → running Node picks up new version from disk → browser sees mismatch → clears SW cache and reloads → fresh `dist/` with GPS code loads. No process restart needed.
+## 15/09/2026, 00:17:29
+
+The code changes are already committed and deployed — the issue is your **browser's cached service worker** is still serving the old `dist/` assets. The server has the new code, but your browser never asks for it because the SW precache is controlling everything.
+
+There is **no way to force-clear a client's service worker cache from the server side** without either restarting Node (to send cache-busting headers) or the user manually clearing it. The SW cache lives entirely in the browser.
+
+## One-time fix (you have to do this manually)
+
+1. Open Chrome DevTools → **Application** tab
+2. Under **Service Workers**, find any `marina` or `sw.js` entries and click **Unregister**
+3. Under **Cache Storage**, expand the origin and click **Clear all**
+4. Reload the page
+
+After this, the app loads fresh from your server, `checkVersion()` stores `1.1.8` in localStorage, and future deploys will auto-clear via the version mismatch.
+
+## Preventive fix for the future
+
+I can modify the SW registration in `main.jsx` to append the app version as a query parameter (e.g., `/sw.js?v=1.1.8`). This forces the browser to fetch a "new" SW script on every deploy, so the update happens automatically without relying on cache clears. It requires a new deploy but after that, you'll never be stuck like this again.
+
+Want me to implement that?
+## 15/09/2026, 00:24:02
+
+Good findings. The source code has the changes and the `dist/` was built after them. Let me verify what's actually in the deployed bundle:
+
+- **GPS code IS in `dist/`** — `captureGPS` and `gps_lat`/`gps_lng` are present in the built JS
+- **"0" fix IS in `dist/`** — the `i>0&&` guard is present in the minified pipeline pill code
+- **`server.js` fix IS in place** — `/api/version` reads from disk
+
+So the deployed code should work. Since you still see the old behavior, the problem is **client-side caching in the installed Android PWA**, not stale server code. Unregistering the SW in DevTools doesn't clear the PWA's own cache when it's installed to the home screen.
+
+## Root cause analysis
+
+The GPS issue has two parts:
+
+1. **`capture="environment"` on the file input** — on Android, this opens the camera as a separate intent/app. When the camera returns to the PWA, the async `navigator.geolocation.getCurrentPosition` call loses its user-gesture context, so Android blocks the permission prompt silently. The catch logs `GPS not available:` to console, which you're not seeing.
+
+2. **Installed PWA cache** — the WebAPK has its own storage separate from the browser. SW unregistration in DevTools doesn't reach it.
+
+## Plan
+
+### Fix 1: Force PWA to reload on version change
+Add a **hard cache-bust** in `main.jsx` after `checkVersion()` clears caches — use `caches.delete()` with the version string as the cache name, then do `window.location.reload(true)` (force reload bypassing HTTP cache). This ensures the installed PWA fetches fresh assets.
+
+### Fix 2: Request GPS before the camera opens
+Change all photo buttons to request GPS **at click time** (before triggering the file input), store it in a component-level ref, and read from that ref when the file is actually uploaded. This preserves the user-gesture chain so Android allows the geolocation prompt.
+
+Specifically:
+- Add a `gpsCache` ref to `ServiceWorkTab`, `ChecklistTab`, and `PhotosTab`
+- On button click: `gpsCache.current = await captureGPS()` then open file input
+- In `uploadPhoto`/`uploadCatPhoto`/`upload`: read `gpsCache.current` instead of calling `captureGPS()` again
+- For the location photo in InfoTab, do the same — request GPS when the location photo button is clicked
+
+### Fix 3: Surface GPS errors to the user
+Change the silent `console.log` in `captureGPS` to also show a toast so you can see *why* GPS failed (permission denied, timeout, no GPS hardware, etc.).
+
+### Fix 4: Add a manual "Refresh Location" button
+In the Info tab, beside the location notes input, add a small GPS button that requests location independently of photo upload. This lets you test GPS independently and gives users a way to manually tag their current position.
+
+---
+
+Want me to implement all four, or prioritize specific ones?
+## 15/09/2026, 00:32:20
+
+The core bug: `captureGPS` is defined inside `InfoTab` but called from `ServiceWorkTab`, `ChecklistTab`, and `PhotosTab` where it's out of scope — silently caught by their try/catch, causing every photo upload to fail with "Upload failed".
+
+I'll fix all four issues now:
+## 15/09/2026, 00:41:13
+
+Done. Here's what changed:
+
+**Root cause found:** `captureGPS` was defined inside `InfoTab` but called from `ServiceWorkTab`, `ChecklistTab`, and `PhotosTab` where it was out of scope. The `ReferenceError` was silently caught by their try/catch blocks, so every photo upload failed with "Upload failed" — that's why nothing was working.
+
+**Changes made to `CardDetailScreen.jsx`:**
+- Moved `captureGPS` to module level so all tabs can use it
+- Added `gpsCache` refs to `InfoTab`, `ServiceWorkTab`, `ChecklistTab`, and `PhotosTab`
+- Changed all photo buttons to **pre-capture GPS at click time** (before the camera opens), preserving the user-gesture chain Android requires
+- Upload functions now read GPS from `gpsCache.current` instead of calling `captureGPS()` again
+- Added a manual **GPS button** (map icon) next to the location notes input so you can test GPS independently
+- GPS failures now show a toast instead of being silently swallowed
+
+**Changes made to `main.jsx`:**
+- Version mismatch now does `window.location.href = window.location.href` (full navigation bypassing HTTP cache) instead of `reload()`, which forces the installed PWA to fetch fresh assets from the server
+
+Push to git and let GoDaddy deploy. After deploy, open DevTools → Application → Service Workers → **Unregister** any existing SW, then reload. You should see the GPS permission prompt when tapping any photo button, and the manual GPS button should show "Location updated" or "GPS unavailable" with a toast.
+## 15/09/2026, 00:46:05
+
+Fixed. The inline `if ... else` without braces was missing a semicolon — changed it to a ternary inside `showToast()`. No other instances of that pattern exist in the file. Rebuild and redeploy.

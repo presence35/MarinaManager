@@ -24,7 +24,7 @@ async function checkVersion() {
         await Promise.all(regs.map(r => r.unregister()))
       }
       localStorage.setItem('marina_app_version', version)
-      window.location.reload()
+      window.location.href = window.location.href
       return
     }
     if (!stored) localStorage.setItem('marina_app_version', version)

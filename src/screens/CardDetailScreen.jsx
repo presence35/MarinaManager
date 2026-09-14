@@ -15,6 +15,25 @@ import SwipeableTask from '../components/SwipeableTask'
 import QrCode from '../components/QrCode'
 import ProductAutocomplete from '../components/ProductAutocomplete'
 
+async function captureGPS() {
+  let gpsLat = null
+  let gpsLng = null
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      })
+    })
+    gpsLat = position.coords.latitude
+    gpsLng = position.coords.longitude
+  } catch (err) {
+    console.log('GPS not available:', err.message)
+  }
+  return { gpsLat, gpsLng }
+}
+
 function isStageComplete(stage, card, cleanKeys) {
   switch (stage) {
     case 'intake': {
@@ -108,6 +127,7 @@ function InfoTab({ card, reload, canEdit = true }) {
   const { employee } = useContext(AuthCtx)
   const [editing, setEditing] = useState(false)
   const locationPhotoRef = useRef(null)
+  const gpsCache = useRef(null)
   const [form, setForm] = useState({
     work_order_no: card.work_order_no || '',
     storage_type: card.storage_type || '',
@@ -167,49 +187,16 @@ function InfoTab({ card, reload, canEdit = true }) {
     } catch (e) { showToast('Save failed') }
   }
 
-  const captureGPS = async () => {
-    let gpsLat = null
-    let gpsLng = null
-    try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        })
-      })
-      gpsLat = position.coords.latitude
-      gpsLng = position.coords.longitude
-    } catch (err) {
-      console.log('GPS not available:', err.message)
-    }
-    return { gpsLat, gpsLng }
-  }
-
   const uploadLocationPhoto = async (file) => {
     if (!file) return
-    let gpsLat = null
-    let gpsLng = null
-    try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        })
-      })
-      gpsLat = position.coords.latitude
-      gpsLng = position.coords.longitude
-    } catch (err) {
-      console.log('GPS not available:', err.message)
-    }
+    const { gpsLat, gpsLng } = gpsCache.current || {}
     try {
       const fd = new FormData()
       fd.append('photo', file)
       fd.append('photo_type', 'location')
       fd.append('caption', `Location: ${form.location_notes || card.storage_location || 'Storage location'}`)
-      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
-      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
+      if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng != null) fd.append('gps_lng', String(gpsLng))
       const res = await fetch(`/api/cards/${card.id}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -219,6 +206,13 @@ function InfoTab({ card, reload, canEdit = true }) {
       showToast('Location photo uploaded')
       reload()
     } catch (e) { showToast('Upload failed') }
+  }
+
+  const handleLocationPhoto = async () => {
+    const result = await captureGPS()
+    gpsCache.current = result
+    if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+    locationPhotoRef.current?.click()
   }
 
   return (
@@ -358,12 +352,19 @@ function InfoTab({ card, reload, canEdit = true }) {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                     <input placeholder="Location notes (optional)" style={{ flex: 1, background: 'var(--surface2)', border: '1.5px solid var(--border)', borderRadius: 'var(--r3)', padding: '9px 12px', fontFamily: 'Barlow', fontSize: 14, color: 'var(--text)', outline: 'none' }}
                       value={form.location_notes} onChange={(e) => setForm({ ...form, location_notes: e.target.value })} />
-                    <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '3px 10px', whiteSpace: 'nowrap' }} onClick={() => locationPhotoRef.current?.click()}>
+                    <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '3px 10px', whiteSpace: 'nowrap' }} onClick={handleLocationPhoto}>
                       <Icon name="camera" size={14} /> Photo
+                    </button>
+                    <button className="btn btn-sm btn-outline" style={{ width: 'auto', padding: '3px 10px', whiteSpace: 'nowrap' }} onClick={async () => {
+                      const result = await captureGPS()
+                      gpsCache.current = result
+                      showToast(result.gpsLat != null ? 'Location updated' : 'GPS unavailable')
+                    }}>
+                      <Icon name="map" size={14} />
                     </button>
                   </div>
                   <input ref={locationPhotoRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-                    onChange={(e) => { if (e.target.files[0]) uploadLocationPhoto(e.target.files[0]); e.target.value = '' }} />
+                    onChange={(e) => { if (e.target.files[0]) uploadLocationPhoto(e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
                 </div>
               )}
               {!form.storage_type && <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', padding: '6px 0' }}>Select a storage type above to configure location</div>}
@@ -558,6 +559,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
   const [productInputs, setProductInputs] = useState({})
   const [editNotes, setEditNotes] = useState({})
   const fileRefs = useRef({})
+  const gpsCache = useRef(null)
 
   const toggle = async (key, field, value) => {
     if (!canEdit) return
@@ -647,13 +649,13 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
   const uploadPhoto = async (key, file) => {
     if (!file) return
     try {
-      const { gpsLat, gpsLng } = await captureGPS()
+      const { gpsLat, gpsLng } = gpsCache.current || {}
       const fd = new FormData()
       fd.append('photo', file)
       fd.append('photo_type', `service_work`)
       fd.append('caption', `Service: ${key}`)
-      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
-      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
+      if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng != null) fd.append('gps_lng', String(gpsLng))
       const res = await fetch(`/api/cards/${card.id}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -663,6 +665,13 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
       showToast('Photo uploaded')
       reload()
     } catch (e) { showToast('Upload failed') }
+  }
+
+  const handleServicePhoto = async (key) => {
+    const result = await captureGPS()
+    gpsCache.current = result
+    if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+    fileRefs.current[key]?.click()
   }
 
   const addCompletedToInvoice = async () => {
@@ -766,11 +775,11 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
                   <div style={{ flex: 1, fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: 'var(--text3)', textTransform: 'uppercase' }}>Notes</div>
                   <button className="btn btn-sm btn-outline" style={{ width: 'auto', fontSize: 11, padding: '2px 8px' }}
-                    onClick={() => fileRefs.current[w.item_key]?.click()}>
+                    onClick={() => handleServicePhoto(w.item_key)}>
                     <Icon name="camera" size={12} /> Photo
                   </button>
                   <input ref={(el) => fileRefs.current[w.item_key] = el} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-                    onChange={(e) => e.target.files[0] && uploadPhoto(w.item_key, e.target.files[0])} />
+                    onChange={(e) => { if (e.target.files[0]) uploadPhoto(w.item_key, e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
                 </div>
                 {allPhotos.length > 0 && (
                   <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
@@ -1162,6 +1171,7 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
   const [itemNotes, setItemNotes] = useState({})
   const [catPhotos, setCatPhotos] = useState({})
   const fileRefs = useRef({})
+  const gpsCache = useRef(null)
 
   useEffect(() => {
     const notes = {}
@@ -1210,13 +1220,13 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
   const uploadCatPhoto = async (cat, file) => {
     if (!file) return
     try {
-      const { gpsLat, gpsLng } = await captureGPS()
+      const { gpsLat, gpsLng } = gpsCache.current || {}
       const fd = new FormData()
       fd.append('photo', file)
       fd.append('photo_type', `checklist_${cat}`)
       fd.append('caption', `${activeList} checklist — ${cat}`)
-      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
-      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
+      if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng != null) fd.append('gps_lng', String(gpsLng))
       const res = await fetch(`/api/cards/${card.id}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -1226,6 +1236,13 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
       showToast('Photo uploaded')
       reload()
     } catch (e) { showToast('Upload failed') }
+  }
+
+  const handleCatPhoto = async (cat) => {
+    const result = await captureGPS()
+    gpsCache.current = result
+    if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+    fileRefs.current[cat]?.click()
   }
 
   const allItems = CHECKLISTS[activeList].flatMap((cat) => cat.items)
@@ -1258,11 +1275,11 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
               <div className="check-cat" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>{cat.cat}</span>
                 <button className="btn btn-sm btn-outline" style={{ width: 'auto', fontSize: 11, padding: '3px 10px' }}
-                  onClick={() => fileRefs.current[cat.cat]?.click()}>
+                  onClick={() => handleCatPhoto(cat.cat)}>
                   <Icon name="camera" size={13} /> Photo
                 </button>
                 <input ref={(el) => fileRefs.current[cat.cat] = el} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-                  onChange={(e) => e.target.files[0] && uploadCatPhoto(catPhotoKey, e.target.files[0])} />
+                  onChange={(e) => { if (e.target.files[0]) uploadCatPhoto(catPhotoKey, e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
               </div>
               {photosForCat.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, padding: '4px 16px 8px', flexWrap: 'wrap' }}>
@@ -1315,17 +1332,18 @@ function PhotosTab({ card, reload }) {
   const [uploading, setUploading] = useState(false)
   const [photoType, setPhotoType] = useState('before')
   const fileRef = useRef(null)
+  const gpsCache = useRef(null)
   const [fullscreen, setFullscreen] = useState(null)
 
   const upload = async (file) => {
     setUploading(true)
     try {
-      const { gpsLat, gpsLng } = await captureGPS()
+      const { gpsLat, gpsLng } = gpsCache.current || {}
       const fd = new FormData()
       fd.append('photo', file)
       fd.append('photo_type', photoType)
-      if (gpsLat !== null) fd.append('gps_lat', String(gpsLat))
-      if (gpsLng !== null) fd.append('gps_lng', String(gpsLng))
+      if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
+      if (gpsLng != null) fd.append('gps_lng', String(gpsLng))
       const res = await fetch(`/api/cards/${card.id}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -1336,6 +1354,13 @@ function PhotosTab({ card, reload }) {
       reload()
     } catch (e) { showToast('Upload failed') }
     setUploading(false)
+  }
+
+  const handleUpload = async () => {
+    const result = await captureGPS()
+    gpsCache.current = result
+    if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+    fileRef.current?.click()
   }
 
   const deletePhoto = async (id) => {
@@ -1357,12 +1382,12 @@ function PhotosTab({ card, reload }) {
             <button key={t} className={`chip ${photoType === t ? 'on' : ''}`} style={{ textTransform: 'capitalize' }} onClick={() => setPhotoType(t)}>{t}</button>
           ))}
         </div>
-        <button className={`btn ${uploading ? 'btn-outline' : 'btn-accent'}`} onClick={() => fileRef.current?.click()} disabled={uploading}>
+        <button className={`btn ${uploading ? 'btn-outline' : 'btn-accent'}`} onClick={handleUpload} disabled={uploading}>
           <Icon name="camera" size={16} color={uploading ? 'var(--text2)' : '#fff'} />
           {uploading ? 'Uploading...' : `Add ${photoType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Photo`}
         </button>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-          onChange={(e) => e.target.files[0] && upload(e.target.files[0])} />
+          onChange={(e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
       </div>
       {!card.photos || card.photos.length === 0 ? (
         <div className="empty-state">
