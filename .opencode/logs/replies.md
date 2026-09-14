@@ -88,3 +88,26 @@ Done. Here's what changed:
 - `createBoat` now casts `length_ft` to a number/null before sending (line 89)
 
 Restart the server — the migrations run automatically on startup, and if there's still an issue, the toast will now show the real error message instead of "Internal server error".
+## 14/09/2026, 17:27:47
+
+The real error is clear now: MySQL rejects `''` for the `length_ft` decimal column. The server-side fix is the most robust — I'll coerce empty strings to `null` before the INSERT, which protects against any frontend sending blanks.
+## 14/09/2026, 17:27:56
+
+Now let me also fix `ScanCardScanner.jsx` since it has the same empty-string issue:
+## 14/09/2026, 17:28:07
+
+The server-side coercion handles both screens. Let me verify the fix:
+## 14/09/2026, 17:28:51
+
+The fix is complete. The root cause was MySQL rejecting empty strings `''` for the `length_ft` decimal column. Here's what was changed:
+
+**server.js:**
+- Lines 42-61: Added migrations to add missing `licence`, `trailer_licence`, `rate_type` columns to `boats` table
+- Lines 331-339: POST `/boats` now coerces empty strings to `null` for all nullable fields before INSERT
+- Lines 348-366: PUT `/boats/:id` similarly coerces empty strings to `null`
+- Lines 342-344: Errors now return the actual MySQL message instead of generic 500
+
+**src/screens/NewCardScreen.jsx:**
+- Line 89: `length_ft` is cast to number/null before sending
+
+Restart the server and try creating a boat again — the empty `length_ft` will now be sent as `null` instead of `''`, which MySQL accepts for a REAL column.

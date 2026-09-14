@@ -328,7 +328,16 @@ module.exports = async function createApp() {
     try {
       const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
       if (!customer_id) return res.status(400).json({ error: 'Customer required' });
-      const r = await db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft);
+      const r = await db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        customer_id,
+        name || null,
+        motor_type || null,
+        model || null,
+        licence || null,
+        trailer_licence || null,
+        rate_type || 'SW',
+        length_ft || null
+      );
       res.json({ id: r.lastInsertRowid });
     } catch (e) {
       console.error('[BOAT CREATE ERROR]', e);
@@ -340,13 +349,13 @@ module.exports = async function createApp() {
     const { name, motor_type, model, licence, trailer_licence, rate_type, length_ft } = req.body;
     const updates = [];
     const params = [];
-    if (name !== undefined) { updates.push('name = ?'); params.push(name); }
-    if (motor_type !== undefined) { updates.push('motor_type = ?'); params.push(motor_type); }
-    if (model !== undefined) { updates.push('model = ?'); params.push(model); }
-    if (licence !== undefined) { updates.push('licence = ?'); params.push(licence); }
-    if (trailer_licence !== undefined) { updates.push('trailer_licence = ?'); params.push(trailer_licence); }
-    if (rate_type !== undefined) { updates.push('rate_type = ?'); params.push(rate_type); }
-    if (length_ft !== undefined) { updates.push('length_ft = ?'); params.push(length_ft); }
+    if (name !== undefined) { updates.push('name = ?'); params.push(name || null); }
+    if (motor_type !== undefined) { updates.push('motor_type = ?'); params.push(motor_type || null); }
+    if (model !== undefined) { updates.push('model = ?'); params.push(model || null); }
+    if (licence !== undefined) { updates.push('licence = ?'); params.push(licence || null); }
+    if (trailer_licence !== undefined) { updates.push('trailer_licence = ?'); params.push(trailer_licence || null); }
+    if (rate_type !== undefined) { updates.push('rate_type = ?'); params.push(rate_type || 'SW'); }
+    if (length_ft !== undefined) { updates.push('length_ft = ?'); params.push(length_ft || null); }
     if (updates.length) {
       params.push(req.params.id);
       await db.prepare(`UPDATE boats SET ${updates.join(', ')} WHERE id=?`).run(...params);
