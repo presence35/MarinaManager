@@ -267,3 +267,31 @@ we neeed a pinch and zoom on all photos
 ## 16/09/2026, 22:57:07
 
 go
+## 16/09/2026, 22:59:27
+
+go
+## 16/09/2026, 23:02:45
+
+doens't seem to be gone.  not sure im updated versi tho  can we add a link to the version number in settings that clears cache and forces refrhes, or checks it's latest version somehow?
+## 16/09/2026, 23:02:57
+
+I'm planning a change to the Marina Manager app (a React 19 PWA in D:\Desktop\marine). I need to add a "version" link in the Settings screen that clears the browser/service-worker cache and forces a hard refresh, and optionally checks whether the app is the latest version.
+
+Please investigate and report back with EXACT line numbers and code snippets:
+
+1. `src/screens/SettingsScreen.jsx` - Read the whole file. I need to know:
+   - How the Settings screen is structured (sections, items)
+   - Whether a version string is already rendered anywhere in it
+   - How other "action" items (buttons that do something like clear data, logout) are structured
+   - The styling classes used (e.g. `.setting-item`, `.section-head`)
+
+2. `src/main.jsx` - Read the whole file. There was mention of a "version-check overlay". I need:
+   - The full code of any version check / overlay logic
+   - How it compares versions (localStorage? fetch? manifest?)
+   - How it triggers a refresh
+
+3. `src/App.jsx` - Search for any version-related logic, `localStorage` usage, or refresh/reload triggers.
+
+4. Check `public/manifest.json` and any `metadata.json` for version fields.
+
+Report exact line numbers and verbatim code. Do NOT edit anything - research only.

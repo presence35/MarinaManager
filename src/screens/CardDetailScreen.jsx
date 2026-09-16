@@ -22,8 +22,8 @@ async function captureGPS() {
     const position = await new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+        timeout: 4000,
+        maximumAge: 10000,
       })
     })
     gpsLat = position.coords.latitude
@@ -208,11 +208,12 @@ function InfoTab({ card, reload, canEdit = true }) {
     } catch (e) { showToast('Upload failed') }
   }
 
-  const handleLocationPhoto = async () => {
-    const result = await captureGPS()
-    gpsCache.current = result
-    if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+  const handleLocationPhoto = () => {
     locationPhotoRef.current?.click()
+    captureGPS().then(result => {
+      gpsCache.current = result
+      if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+    })
   }
 
   return (
@@ -1238,11 +1239,12 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
     } catch (e) { showToast('Upload failed') }
   }
 
-  const handleCatPhoto = async (cat) => {
-    const result = await captureGPS()
-    gpsCache.current = result
-    if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+  const handleCatPhoto = (cat) => {
     fileRefs.current[cat]?.click()
+    captureGPS().then(result => {
+      gpsCache.current = result
+      if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+    })
   }
 
   const allItems = CHECKLISTS[activeList].flatMap((cat) => cat.items)
@@ -1334,6 +1336,28 @@ function PhotosTab({ card, reload }) {
   const fileRef = useRef(null)
   const gpsCache = useRef(null)
   const [fullscreen, setFullscreen] = useState(null)
+  const [zoom, setZoom] = useState(1)
+  const lastTap = useRef(0)
+  const touchRef = useRef(null)
+
+  const zoomImg = (e) => {
+    if (e.touches.length === 2) {
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      )
+      const prev = touchRef.current?.dist || d
+      const scale = Math.max(1, Math.min(5, zoom * (d / prev)))
+      touchRef.current = { dist: d }
+      setZoom(scale)
+    }
+  }
+  const resetZoom = () => { touchRef.current = null; setZoom(1) }
+  const onDoubleTap = () => {
+    const now = Date.now()
+    if (now - lastTap.current < 300) { setZoom(z => (z > 1.2 ? 1 : 2.5)); lastTap.current = 0 }
+    else lastTap.current = now
+  }
 
   const upload = async (file) => {
     setUploading(true)
@@ -1356,11 +1380,12 @@ function PhotosTab({ card, reload }) {
     setUploading(false)
   }
 
-  const handleUpload = async () => {
-    const result = await captureGPS()
-    gpsCache.current = result
-    if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+  const handleUpload = () => {
     fileRef.current?.click()
+    captureGPS().then(result => {
+      gpsCache.current = result
+      if (result.gpsLat == null) showToast('GPS unavailable — photo saved without location')
+    })
   }
 
   const deletePhoto = async (id) => {
@@ -1406,12 +1431,19 @@ function PhotosTab({ card, reload }) {
         </div>
       )}
       {fullscreen && (
-        <div className="modal-overlay" onClick={() => setFullscreen(null)} style={{ alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#000', borderRadius: 12, overflow: 'hidden', maxWidth: '100%', maxHeight: '80dvh', position: 'relative' }}>
-            <img src={`/photos/${fullscreen.filename}`} style={{ width: '100%', display: 'block' }} alt="" />
+        <div className="modal-overlay" onClick={() => { setFullscreen(null); resetZoom() }} style={{ alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#000', borderRadius: 12, overflow: 'auto', maxWidth: '100%', maxHeight: '80dvh', position: 'relative', WebkitOverflowScrolling: 'touch' }}>
+            <img src={`/photos/${fullscreen.filename}`} alt=""
+              style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'manipulate', transformOrigin: 'center center', transform: `scale(${zoom})`, transition: 'transform .15s ease' }}
+              onTouchStart={zoomImg}
+              onTouchMove={(e) => { e.preventDefault(); zoomImg(e) }}
+              onTouchEnd={resetZoom}
+              onDoubleClick={onDoubleTap}
+              onClick={onDoubleTap}
+            />
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(0,0,0,.8)' }}>
               <span style={{ color: '#fff', fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{fullscreen.photo_type}</span>
-              <button onClick={() => { deletePhoto(fullscreen.id); setFullscreen(null) }}
+              <button onClick={() => { deletePhoto(fullscreen.id); setFullscreen(null); resetZoom() }}
                 style={{ background: 'rgba(214,64,69,.8)', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 10px', fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 12, cursor: 'pointer', letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 DELETE
               </button>

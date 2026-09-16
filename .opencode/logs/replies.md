@@ -2634,3 +2634,188 @@ Fixed. Build passes.
 
 
 
+
+## 16/09/2026, 22:58:10
+
+
+
+
+
+## 16/09/2026, 22:58:36
+
+
+
+
+
+## 16/09/2026, 22:58:42
+
+
+
+
+
+## 16/09/2026, 22:58:54
+
+
+
+Found the root cause. The viewport meta tag disables zoom globally:
+
+`dist/index.html:7` → `content="width=device-width,initial-scale=1,viewport-fit=cover,**user-scalable=no**"`
+
+`user-scalable=no` disables pinch-to-zoom for the entire app, including the photo fullscreen modal. The photo CSS itself is fine (`maxHeight: 80dvh`, `width: 100%`).
+
+Plan for the two tasks:
+
+**1. Photo upload crash (GPS)**
+- `src/screens/CardDetailScreen.jsx:18-35` — `captureGPS()` rejects on failure (permission denied / timeout), but the `catch` already swallows it and returns `{ gpsLat: null, gpsLng: null }`. So the crash isn't from `captureGPS` throwing.
+- The real bug: `handleUpload()` (line 1359) awaits `captureGPS()` **before** opening the file picker. On devices with no GPS or denied permission, the 10s high-accuracy timeout fires, then the toast shows — but the crash you're seeing is likely the button staying `disabled` mid-flight or the picker never opening. Fix: don't gate the picker on GPS; fire-and-forget GPS in the background, and attach the position to the upload when it resolves. Also reduce timeout / drop `maximumAge: 0` so it doesn't hang on stale fix.
+
+**2. Pinch-to-zoom on photos**
+- Fix the viewport: remove `user-scalable=no` (or set `user-scalable=yes`) in `index.html` (both `public/` and `dist/`).
+- Make the fullscreen photo scalable: add `width: 100%; height: auto; max-width: 100%;` and let it overflow the modal, plus `touch-action: pan-y pinch-zoom` on the wrapper so gestures register.
+- Optionally add basic pinch-zoom JS on the fullscreen `img` for a real zoom level (scale transform) — but the simplest fix that satisfies "pinch and zoom on all photos" is just enabling browser zoom + responsive sizing.
+
+Files to change:
+1. `src/screens/CardDetailScreen.jsx` — GPS flow + photo img styles
+2. `public/index.html` — viewport `user-scalable`
+3. `dist/index.html` — viewport `user-scalable` (deployed copy)
+
+Then rebuild (`npm run build`) to sync `dist/`.
+
+Want me to go ahead, and do you want the simpler "enable browser pinch zoom" approach or a custom zoom level with double-tap?
+## 16/09/2026, 22:59:52
+
+
+
+
+
+## 16/09/2026, 22:59:55
+
+
+
+
+
+## 16/09/2026, 23:00:00
+
+
+
+
+
+## 16/09/2026, 23:00:25
+
+
+
+Now I'll make the edits. Starting with the viewport in both HTML files and the GPS/photo code.
+
+## 16/09/2026, 23:00:29
+
+
+
+
+
+## 16/09/2026, 23:00:37
+
+
+
+
+
+## 16/09/2026, 23:00:53
+
+
+
+Now the GPS fix. Let me read the exact code for all three photo handlers.
+
+## 16/09/2026, 23:01:12
+
+
+
+Now the GPS fix. I'll make `captureGPS` non-blocking and have the photo handlers open the picker immediately while GPS resolves in the background.
+
+## 16/09/2026, 23:01:23
+
+
+
+
+
+## 16/09/2026, 23:01:28
+
+
+
+
+
+## 16/09/2026, 23:01:37
+
+
+
+
+
+## 16/09/2026, 23:01:44
+
+
+
+
+
+## 16/09/2026, 23:01:49
+
+
+
+Now the pinch-to-zoom. I'll add touch-based zoom to the fullscreen photo.
+
+## 16/09/2026, 23:01:58
+
+
+
+
+
+## 16/09/2026, 23:02:03
+
+
+
+
+
+## 16/09/2026, 23:02:08
+
+
+
+
+
+## 16/09/2026, 23:02:20
+
+
+
+
+
+## 16/09/2026, 23:02:29
+
+
+
+
+
+## 16/09/2026, 23:02:37
+
+
+
+Now let me verify the edits and rebuild `dist/`.
+
+## 16/09/2026, 23:02:41
+
+
+
+
+
+## 16/09/2026, 23:02:46
+
+
+
+
+
+## 16/09/2026, 23:02:50
+
+
+
+
+
+## 16/09/2026, 23:02:57
+
+
+
+Build succeeded. Let me verify the deployed `dist/` now contains the fixes.
