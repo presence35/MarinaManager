@@ -572,6 +572,14 @@ module.exports = async function createApp() {
     res.json({ ok: true });
   }));
 
+  const toMysqlDateTime = (val) => {
+    if (!val) return null;
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return null;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
   app.put('/api/cards/:id/work', requireAuth, asyncHandler(async (req, res) => {
     for (const { service_type, authorized, completed, notes, completed_by, completed_at, products_used } of (req.body.work || [])) {
       let productsJson;
@@ -579,7 +587,7 @@ module.exports = async function createApp() {
         const p = typeof products_used === 'string' ? JSON.parse(products_used) : (products_used || []);
         productsJson = JSON.stringify(Array.isArray(p) ? p : []);
       } catch { productsJson = '[]'; }
-      await db.prepare('REPLACE INTO authorized_work (card_id, service_type, authorized, completed, notes, completed_by, completed_at, products_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null, completed_by || null, completed_at || null, productsJson);
+      await db.prepare('REPLACE INTO authorized_work (card_id, service_type, authorized, completed, notes, completed_by, completed_at, products_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(req.params.id, service_type, authorized ? 1 : 0, completed ? 1 : 0, notes || null, completed_by || null, toMysqlDateTime(completed_at), productsJson);
     }
     await db.prepare('UPDATE service_cards SET updated_at = NOW() WHERE id=?').run(req.params.id);
 
@@ -793,10 +801,10 @@ module.exports = async function createApp() {
       const allDone = Object.keys(items).length > 0 && Object.values(items).every(v => v === true);
       const existing = await db.prepare('SELECT id FROM checklist_completions WHERE card_id=? AND checklist_type=?').get(req.params.id, checklist_type);
       if (existing) {
-        await db.prepare('UPDATE checklist_completions SET items_json=?,employee_id=?,completed_at=?,updated_at=NOW() WHERE id=?').run(items_json, req.employee.id, allDone ? new Date().toISOString() : null, existing.id);
+        await db.prepare('UPDATE checklist_completions SET items_json=?,employee_id=?,completed_at=?,updated_at=NOW() WHERE id=?').run(items_json, req.employee.id, allDone ? toMysqlDateTime(new Date()) : null, existing.id);
         res.json({ id: existing.id });
       } else {
-        const r = await db.prepare('INSERT INTO checklist_completions (card_id,checklist_type,employee_id,items_json,completed_at) VALUES (?,?,?,?,?)').run(req.params.id, checklist_type, req.employee.id, items_json, allDone ? new Date().toISOString() : null);
+        const r = await db.prepare('INSERT INTO checklist_completions (card_id,checklist_type,employee_id,items_json,completed_at) VALUES (?,?,?,?,?)').run(req.params.id, checklist_type, req.employee.id, items_json, allDone ? toMysqlDateTime(new Date()) : null);
         res.json({ id: r.lastInsertRowid });
       }
 

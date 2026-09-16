@@ -1267,3 +1267,233 @@ Push to git and let GoDaddy deploy. After deploy, open DevTools → Application 
 ## 15/09/2026, 00:46:05
 
 Fixed. The inline `if ... else` without braces was missing a semicolon — changed it to a ternary inside `showToast()`. No other instances of that pattern exist in the file. Rebuild and redeploy.
+## 16/09/2026, 22:20:44
+
+
+
+The error indicates the SQL query is failing because the datetime format `'2026-09-16T19:16:34.887Z'` is incompatible with MySQL's DATETIME column. The `Z` suffix (indicating UTC) and possibly the milliseconds are causing the issue.
+
+To help you effectively, I need to know:
+
+1. **What is your goal?** Do you want me to fix the code that generates this SQL query, or is this a one-time data fix?
+2. **Where should I look?** Should I search the codebase for where this `REPLACE INTO` statement is constructed?
+
+If you'd like me to fix this, the typical solution would be to either:
+- Remove the `Z` suffix and format as `2026-09-16 19:16:34` (or `2026-09-16T19:16:34`)
+- Use MySQL's `STR_TO_DATE()` function if the application is sending ISO format
+- Configure the application's database layer to handle ISO 8601 dates properly
+
+Please let me know how you'd like to proceed.
+## 16/09/2026, 22:21:29
+
+
+
+I'll find where this SQL query is generated and fix the datetime formatting.
+
+
+## 16/09/2026, 22:21:36
+
+
+
+I'll examine the relevant code in `server.js` to understand how `completed_at` is being set.
+
+## 16/09/2026, 22:21:42
+
+
+
+I can see the issue. The `completed_at` value is passed directly from the frontend as an ISO 8601 string (`2026-09-16T19:16:34.887Z`), which MySQL's DATETIME column doesn't accept. Let me check the schema and fix it.
+
+## 16/09/2026, 22:21:46
+
+
+
+
+
+## 16/09/2026, 22:21:50
+
+
+
+
+
+## 16/09/2026, 22:21:54
+
+
+
+
+
+## 16/09/2026, 22:21:59
+
+
+
+I can see the issue. The `completed_at` value is being passed as an ISO 8601 string (`2026-09-16T19:16:34.887Z`) which MySQL's DATETIME column doesn't accept. Let me find where this timestamp is generated in the frontend.
+
+
+## 16/09/2026, 22:22:07
+
+
+
+I found the issue. The `completed_at` value is being passed as an ISO 8601 string (`2026-09-16T19:16:34.887Z`) which MySQL's DATETIME column doesn't accept. Let me fix it in the server by converting the format.
+
+## 16/09/2026, 22:22:17
+
+
+
+I'll fix the `completed_at` datetime format issue. The frontend sends ISO 8601 format (`2026-09-16T19:16:34.887Z`) but MySQL expects `YYYY-MM-DD HH:MM:SS`. Let me add a conversion in the server.
+
+## 16/09/2026, 22:22:22
+
+
+
+Let me verify the edit was applied correctly:
+
+## 16/09/2026, 22:22:26
+
+
+
+The fix is applied. Let me verify the server starts correctly by checking for syntax errors.
+
+## 16/09/2026, 22:22:30
+
+
+
+
+
+## 16/09/2026, 22:22:36
+
+
+
+Syntax is valid. Let me check if there are other places that receive `completed_at` to ensure full coverage.
+
+
+## 16/09/2026, 22:22:44
+
+
+
+I see there are other `completed_at` usages in checklist endpoints (lines 804, 807) that also use ISO format. Let me check the schema to understand the column types.
+
+## 16/09/2026, 22:22:50
+
+
+
+The schema shows `completed_at TEXT` for SQLite, but the error message "Incorrect datetime value" is a MySQL error — so production uses MySQL where `completed_at` is likely a DATETIME column. My fix converts ISO format to MySQL format. Let me also fix the checklist endpoints that use the same ISO format.
+
+
+## 16/09/2026, 22:22:58
+
+
+
+I'll fix the checklist endpoints too, since they use the same ISO format that MySQL won't accept.
+
+## 16/09/2026, 22:23:02
+
+
+
+Let me check for other datetime-related issues in the server:
+
+## 16/09/2026, 22:23:08
+
+
+
+The other `toISOString` usages are for date-only fields (`YYYY-MM-DD` format), which work fine. Let me verify the server still parses correctly:
+
+
+## 16/09/2026, 22:23:15
+
+
+
+The fix is complete. Here's a summary of what I changed in `server.js`:
+
+**Root cause:** The frontend sends `completed_at` as an ISO 8601 timestamp (`2026-09-16T19:16:34.887Z`), but MySQL's DATETIME column expects `YYYY-MM-DD HH:MM:SS`. The `Z` suffix and milliseconds cause the "Incorrect datetime value" error.
+
+**Fix (server.js:575-590, 804, 807):**
+- Added a `toMysqlDateTime()` helper that converts any ISO/date value to MySQL's `YYYY-MM-DD HH:MM:SS` format (returns `null` for invalid/empty values)
+- Applied it to the `completed_at` parameter in the `PUT /api/cards/:id/work` endpoint
+- Applied it to the `completed_at` in both checklist completion endpoints (UPDATE and INSERT)
+
+This handles both SQLite (TEXT column, accepts any string) and MySQL (DATETIME column, requires proper format) correctly. The server syntax check passes.
+## 16/09/2026, 22:24:06
+
+
+
+I'll search for other datetime fields that may have the same ISO format issue.
+
+## 16/09/2026, 22:24:16
+
+
+
+I'll check how `date_out` and other date fields are formatted in the frontend to determine which ones need the conversion.
+
+## 16/09/2026, 22:24:25
+
+
+
+The other date fields are already safe:
+- `date_in`, `date_out`, `log_date` use `.toISOString().split('T')[0]` → `YYYY-MM-DD` (MySQL DATE-compatible)
+- `created_at`, `updated_at`, `uploaded_at`, `changed_at` use SQL `NOW()`/`datetime('now')` (database-generated)
+
+Only `completed_at` in both `authorized_work` and `checklist_completions` was receiving full ISO format. Both are now fixed with the `toMysqlDateTime()` helper.
+
+Let me verify the final state of the server:
+
+
+## 16/09/2026, 22:24:37
+
+
+
+
+
+## 16/09/2026, 22:24:45
+
+
+
+All other date fields are already safe. Here's the complete analysis:
+
+**Fields checked in `server.js`:**
+
+| Field | Source | Format | Status |
+|-------|--------|--------|--------|
+| `date_in` | Frontend | `YYYY-MM-DD` (`.toISOString().split('T')[0]`) | OK |
+| `date_out` | Frontend | `YYYY-MM-DD` | OK |
+| `log_date` | Frontend | `YYYY-MM-DD` | OK |
+| `created_at` | SQL `NOW()` | DB-generated | OK |
+| `updated_at` | SQL `NOW()` | DB-generated | OK |
+| `uploaded_at` | SQL default | DB-generated | OK |
+| `changed_at` | SQL default | DB-generated | OK |
+| `completed_at` (authorized_work) | Frontend ISO `2026-09-16T19:16:34.887Z` | **Fixed** with `toMysqlDateTime()` |
+| `completed_at` (checklist_completions) | Server `new Date().toISOString()` | **Fixed** with `toMysqlDateTime()` |
+
+The fix is complete. Only `completed_at` was the problem — it's the only field receiving a full ISO 8601 timestamp with `T`/`Z`/milliseconds, which MySQL's DATETIME rejects. Both occurrences are now converted to `YYYY-MM-DD HH:MM:SS` via the `toMysqlDateTime()` helper at `server.js:575`.
+## 16/09/2026, 22:25:00
+
+
+
+The fix is already applied. Let me verify the current state of the changes:
+
+
+## 16/09/2026, 22:25:06
+
+
+
+The fix is already in place. Let me verify the checklist endpoints and run a final syntax check:
+
+## 16/09/2026, 22:25:11
+
+
+
+All three fixes are in place. Final syntax verification:
+
+
+## 16/09/2026, 22:25:18
+
+
+
+The fix is complete and verified. Here's a summary of the changes made to `server.js`:
+
+**Root cause:** The frontend sends `completed_at` as an ISO 8601 timestamp (`2026-09-16T19:16:34.887Z`), but MySQL's DATETIME column expects `YYYY-MM-DD HH:MM:SS`. The `Z` suffix and milliseconds caused the "Incorrect datetime value" error.
+
+**Fixes applied:**
+1. **`server.js:575-581`** — Added `toMysqlDateTime()` helper that converts any ISO/date value to MySQL's `YYYY-MM-DD HH:MM:SS` format (returns `null` for invalid/empty values)
+2. **`server.js:590`** — Applied it to `completed_at` in `PUT /api/cards/:id/work` (the endpoint from the error)
+3. **`server.js:804, 807`** — Applied it to `completed_at` in both checklist completion endpoints (UPDATE and INSERT), which had the same ISO format issue
+
+All other date fields (`date_in`, `date_out`, `log_date`) were already using `YYYY-MM-DD` format and are compatible with both SQLite and MySQL.

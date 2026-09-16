@@ -182,3 +182,21 @@ Error: Build failed with 1 error:
   errors: [Getter/Setter]
 }
 PS D:\Desktop\marine>
+## 15/09/2026, 00:51:24
+
+nothing changed.  1.1.8
+## 16/09/2026, 22:20:31
+
+sql: `REPLACE INTO authorized_work (card_id, service_type, authorized, completed, notes, completed_by, completed_at, products_used) VALUES ('12', 'ext_algae_wax', 1, 1, NULL, 1, '2026-09-16T19:16:34.887Z', '[{\\"description\\":\\"\\",\\"quantity\\":0.5},{\\"description\\":\\"Algae strip\\",\\"quantity\\":1}]')`3 minutes agoinfo[ERROR] Error: Incorrect datetime value: '2026-09-16T19:16:58.596Z' for column 'completed_at' at row 1
+## 16/09/2026, 22:21:26
+
+fix it properly
+## 16/09/2026, 22:23:59
+
+add it to other fields to
+## 16/09/2026, 22:24:53
+
+go
+## 16/09/2026, 22:26:01
+
+[2026-09-15 12:04 AM] jamss: Still failed to save shronk rrap complete[2026-09-15 12:05 AM] jamss: Ooh, and i tried to tap pickup/delivery. It saves that but cant uncheck after if oops
