@@ -3491,3 +3491,871 @@ Let me check how the server serves the frontend — this determines whether `dis
 
 
 
+
+## 16/09/2026, 23:08:15
+
+
+
+Now I understand the full picture. The server serves `dist/` at root (`server.js:182`), so `npm run build` + deploy is the right path. The real problem: **the version never changes between builds**, so `main.jsx`'s `checkVersion()` (which only fires cache-clear on version mismatch) never triggers.
+
+Let me fix this properly: make the build auto-generate a new version on every build, serve that, and add a manual cache-clear control in Settings.
+
+
+## 16/09/2026, 23:08:36
+
+
+
+
+
+## 16/09/2026, 23:08:44
+
+
+
+Now I understand the full picture. The root cause of "version isn't auto bumping": `server.js:864-866` serves `/api/version` by reading `package.json`, which never changes between builds — so the served version is always `1.1.9`, and `main.jsx`'s version-mismatch cache-clear never fires.
+
+Let me fix this so every build gets a unique version, the server serves it, and Settings exposes a manual cache-clear.
+
+**Step 1:** Create a build-version generator.
+
+## 16/09/2026, 23:08:51
+
+
+
+
+
+## 16/09/2026, 23:08:51
+
+
+
+I can't tell from the repo alone what's blocking the install. The PWA elements are all present in `dist/` — `manifest.json` (`display: standalone`, icons, `start_url: /`), `registerSW.js`, the service worker, and the PWA meta tags. So the blocker is at the **serving/hosting** layer. A few things to check:
+
+1. **Is the site HTTPS?** Chrome (and the Android install prompt) requires HTTPS for PWA install + service worker. If it's `http://`, no install UI appears at all.
+
+2. **What URL are you opening?** The manifest is referenced as `/manifest.json` and icons as `/icon-192.png` (absolute root). If the app is served at a subpath like `domain.ca/marine/`, the browser looks for the manifest at `domain.ca/manifest.json` — which is either a different file or missing — so Chrome won't offer install.
+
+3. **Which browser are you using to test the install?** PWAs only work in Chrome/Edge on Android. Firefox ignores the manifest and won't install — if you're testing in Firefox, that alone explains "shows as Firefox."
+
+4. **Is the app already installed?** If you previously installed it (or a stale version), the old service worker may still be active. Check `chrome://inspect/#apps` → "Install" section, or long-press the home screen icon to see if it's there.
+
+Quick diagnostic you can run in Chrome DevTools (mobile → "More tools → Rendering → Network conditions" won't help; instead):
+- Console: does `navigator.serviceWorker.getRegistration()` return a registration?
+- Application tab → Manifest: does it show "Marina Manager" with a valid icon?
+
+Which URL/HTTPS/browser are you using? That'll pin it down.
+## 16/09/2026, 23:09:04
+
+
+
+Now update the server to serve the build version from `build-version.json` (live, so it always reflects the deployed build):
+
+
+## 16/09/2026, 23:09:24
+
+
+
+Now update SettingsScreen to expose a manual cache-clear and show the build version clearly:
+
+
+## 16/09/2026, 23:09:32
+
+
+
+
+
+## 16/09/2026, 23:09:39
+
+
+
+
+
+## 16/09/2026, 23:09:46
+
+
+
+
+
+## 16/09/2026, 23:09:55
+
+
+
+
+
+## 16/09/2026, 23:10:03
+
+
+
+
+
+## 16/09/2026, 23:10:08
+
+
+
+
+
+## 16/09/2026, 23:10:15
+
+
+
+
+
+## 16/09/2026, 23:10:22
+
+
+
+
+
+## 16/09/2026, 23:10:29
+
+
+
+
+
+## 16/09/2026, 23:10:38
+
+
+
+
+
+## 16/09/2026, 23:10:44
+
+
+
+
+
+## 16/09/2026, 23:10:52
+
+
+
+
+
+## 16/09/2026, 23:10:59
+
+
+
+
+
+## 16/09/2026, 23:11:04
+
+
+
+
+
+## 16/09/2026, 23:11:11
+
+
+
+
+
+## 16/09/2026, 23:11:18
+
+
+
+
+
+## 16/09/2026, 23:11:24
+
+
+
+
+
+## 16/09/2026, 23:11:33
+
+
+
+
+
+## 16/09/2026, 23:11:53
+
+
+
+The edit tool is struggling with whitespace matching. Let me rewrite the file cleanly.
+
+
+## 16/09/2026, 23:12:12
+
+
+
+
+
+## 16/09/2026, 23:12:17
+
+
+
+
+
+## 16/09/2026, 23:12:25
+
+
+
+The button works; let me just fix the indentation on lines 143-145.
+
+
+
+## 16/09/2026, 23:12:32
+
+
+
+The button works functionally — the indentation is just cosmetic. Let me verify the file is valid and rebuild.
+
+
+## 16/09/2026, 23:12:38
+
+
+
+
+
+## 16/09/2026, 23:12:45
+
+
+
+The `clearCache` function got inserted in the wrong place — inside the JSX `return`. Let me fix the structure.
+
+
+
+## 16/09/2026, 23:12:59
+
+
+
+
+
+## 16/09/2026, 23:13:04
+
+
+
+The `clearCache` function got inserted in the wrong place (inside the JSX). Let me rewrite the file cleanly.
+
+
+
+## 16/09/2026, 23:13:25
+
+
+
+
+
+## 16/09/2026, 23:13:32
+
+
+
+Let me fix the structure with targeted edits — first remove the misplaced function from inside the JSX, then add it in the right place.
+
+
+
+
+## 16/09/2026, 23:13:40
+
+
+
+
+
+## 16/09/2026, 23:13:41
+
+
+
+
+
+## 16/09/2026, 23:13:46
+
+
+
+
+
+## 16/09/2026, 23:14:08
+
+
+
+Let me use a shell heredoc to rewrite the file cleanly.
+
+## 16/09/2026, 23:14:28
+
+
+
+
+
+## 16/09/2026, 23:14:50
+
+
+
+
+
+## 16/09/2026, 23:15:00
+
+
+
+Two separate problems here. Let me confirm my findings before proposing the fix.
+
+**Why pinch doesn't work — I found the bug I introduced:**
+
+`src/screens/CardDetailScreen.jsx:1437` — I set `touchAction: 'manipulate'` on the fullscreen image. Per the CSS spec, `manipulate` tells the browser "pan/scroll only, **disable pinch-zoom and double-tap zoom**." So my own style is actively suppressing the pinch gesture. Also my pinch handler has a flaw: on the first `touchmove`, `touchRef.current?.dist` is null so `prev = d`, making `scale = zoom * 1` — the first pixel of the pinch is dead, and it only starts responding on the second move.
+
+Also relevant: I rebuilt `dist/` **locally**, but the production server serves its own copy of `dist/` (`server.js:177` → `path.join(__dirname, 'dist')`). Unless you upload the new build, the live app still has `user-scalable=no` in the viewport, which disables browser pinch-zoom app-wide.
+
+**The PWA / alt-tab question** (separate, brief answer): Chrome only offers install when the site is HTTPS and the manifest resolves at the URL the page is loaded from. Your manifest is referenced as `/manifest.json` (absolute root) and icons as `/icon-192.png` — if the app is served at a subpath, Chrome looks for the manifest at the domain root and won't show install. That's why it shows as Firefox instead of "Marina Manager."
+
+---
+
+## Plan (read-only — not executing yet)
+
+**1. `src/screens/CardDetailScreen.jsx` — rewrite the fullscreen zoom**
+- Remove `touchAction: 'manipulate'` and the `transform: scale()` approach.
+- Switch to **width-based scaling**: `width: ${zoom * 100}%; height: auto; max-width: none`. The image's layout box grows when zoomed, so the container's `overflow: auto` actually scrolls to reveal the zoomed area (with `transform` the box stays at natural size and the zoomed image just gets clipped).
+- Fix the pinch handler: capture the initial 2-finger distance and base zoom on `touchStart`, then `zoom = clamp(z0 * d/d0, 1, 5)` on `move`. Only `preventDefault` while actually pinching (2 fingers) so 1-finger scroll still works.
+- Reset `zoom` to 1 on open/close via `useEffect([fullscreen])`.
+- Keep double-tap toggle (remove the duplicate `onClick` so it doesn't fire twice).
+
+**2. Verify `index.html` + `dist/index.html`** already have `user-scalable=yes` (done, but confirm the deployed copy matches).
+
+**3. Rebuild + deploy**
+- `npm run build` to regenerate `dist/`
+- Upload the new `dist/` (index.html, assets/*, sw.js, registerSW.js, manifest.json) to the production server
+- Restart the Node app
+- Re-install the PWA / clear the service worker cache so the new bundle is served
+
+Want me to execute this, or do you want to adjust anything first (e.g., max zoom level, keep double-tap, or also fix the PWA manifest path for the alt-tab issue)?
+## 16/09/2026, 23:15:10
+
+
+
+
+
+## 16/09/2026, 23:15:30
+
+
+
+
+
+## 16/09/2026, 23:15:50
+
+
+
+
+
+## 16/09/2026, 23:16:10
+
+
+
+
+
+## 16/09/2026, 23:16:30
+
+
+
+
+
+## 16/09/2026, 23:16:50
+
+
+
+
+
+## 16/09/2026, 23:17:13
+
+
+
+Let me try the write tool with minimal content to see if it works now.
+
+
+## 16/09/2026, 23:17:34
+
+
+
+
+
+## 16/09/2026, 23:17:40
+
+
+
+
+
+## 16/09/2026, 23:18:01
+
+
+
+Let me use bash to rewrite the file cleanly.
+
+
+
+## 16/09/2026, 23:18:15
+
+
+
+Let me try a smaller targeted edit to remove the misplaced function block.
+
+
+
+## 16/09/2026, 23:18:26
+
+
+
+
+
+## 16/09/2026, 23:18:35
+
+
+
+Now add `clearCache` in the right place (after `handleExport`, before the `return (`):
+
+
+
+## 16/09/2026, 23:18:42
+
+
+
+
+
+## 16/09/2026, 23:18:49
+
+
+
+
+
+## 16/09/2026, 23:19:09
+
+
+
+
+
+## 16/09/2026, 23:19:14
+
+
+
+
+
+## 16/09/2026, 23:19:21
+
+
+
+
+
+## 16/09/2026, 23:19:28
+
+
+
+
+
+## 16/09/2026, 23:19:34
+
+
+
+Let me try a different anchor for the edit — the exact text might have subtle differences.
+
+
+
+## 16/09/2026, 23:19:39
+
+
+
+
+
+## 16/09/2026, 23:19:58
+
+
+
+Bash works now. Let me rewrite the file cleanly via a heredoc.
+
+
+
+## 16/09/2026, 23:20:04
+
+
+
+
+
+## 16/09/2026, 23:20:12
+
+
+
+
+
+## 16/09/2026, 23:20:20
+
+
+
+
+
+## 16/09/2026, 23:20:31
+
+
+
+
+
+## 16/09/2026, 23:20:40
+
+
+
+
+
+## 16/09/2026, 23:20:49
+
+
+
+
+
+## 16/09/2026, 23:20:57
+
+
+
+
+
+## 16/09/2026, 23:21:04
+
+
+
+
+
+## 16/09/2026, 23:21:09
+
+
+
+Found the real bugs. Two separate issues, and the answer to your second question is the key insight.
+
+## Why p&z is "so difficult" — it isn't
+
+Native pinch-zoom on a Chrome PWA is **one line**: the viewport meta. `user-scalable=no` (which the app had) disables zoom for the entire PWA. You don't need any JS at all — Chrome's native pinch-zoom and double-tap-to-zoom both work in `display: standalone` when zoom is allowed. The whole struggle came from `user-scalable=no` plus trying to bolt custom JS on top of a disabled gesture.
+
+## Why my custom zoom failed (3 bugs)
+
+`src/screens/CardDetailScreen.jsx`:
+
+1. **`onTouchEnd={resetZoom()` wipes the zoom.** On every touch end it calls `setZoom(1)`. So a pinch zooms on `touchmove` and is immediately reset on `touchend` — pinch appears to do nothing.
+2. **`touchAction: 'manipulate'` on the img** tells the browser to suppress pinch-zoom *and* double-tap-zoom on that element.
+3. **`onDoubleClick` + `onClick` both wired to the same handler**, and `onTouchMove` calls `e.preventDefault()`, which can swallow the synthesized click — so double-tap rarely fires cleanly.
+
+Plus the `transform: scale()` approach is clipped by the container's `overflow: hidden`, so even when it worked you'd see nothing.
+
+## Recommended plan — go native, delete the JS
+
+**1. `src/screens/CardDetailScreen.jsx`** — strip the custom zoom entirely:
+- Remove `zoom`, `lastTap`, `touchRef` state, and `zoomImg` / `resetZoom` / `onDoubleTap`
+- img style → `{{ width: '100%', height: 'auto', display: 'block' }}` (natural sizing; let it overflow and scroll)
+- Remove `onTouchStart/Move/End`, `onDoubleClick`, `onClick`, `touchAction`, `transform`
+- Container stays `overflow: auto` + `WebkitOverflowScrolling: 'touch'` so a tall photo scrolls
+- Remove the `resetZoom()` calls in the close/delete handlers
+
+**2. Verify viewport** — `index.html` and `dist/index.html` already have `user-scalable=yes` (done locally). Native pinch + double-tap then just work.
+
+**3. Rebuild + deploy** — `npm run build`, upload the new `dist/` to the production server (it serves its own copy, `server.js:177`), restart the app, then reinstall the PWA so the new bundle + SW take effect.
+
+One tradeoff to confirm: native zoom scales the **whole screen** (modal chrome included), not just the photo. For a photo viewer that's normal and expected — but if you'd rather zoom only the image, I can fix the JS instead (track initial pinch distance on `touchStart`, drop `onTouchEnd` reset, remove `manipulate`, and use width-based scaling so it actually scrolls). Which do you want — **native whole-screen zoom** (simplest, most reliable) or **image-only custom zoom**?
+## 16/09/2026, 23:21:10
+
+
+
+
+
+## 16/09/2026, 23:21:15
+
+
+
+Now let me verify the full file is correct and clean up the temp script, then rebuild.
+
+
+
+## 16/09/2026, 23:21:26
+
+
+
+The structure is correct now. Let me fix the cosmetic indentation on the version button and clean up the temp script.
+
+## 16/09/2026, 23:21:46
+
+
+
+
+
+## 16/09/2026, 23:21:54
+
+
+
+
+
+## 16/09/2026, 23:21:56
+
+
+
+Going native. Stripping the custom zoom JS and relying on the viewport's `user-scalable=yes`.
+
+## 16/09/2026, 23:22:02
+
+
+
+
+
+## 16/09/2026, 23:22:04
+
+
+
+
+
+## 16/09/2026, 23:22:08
+
+
+
+Now let me update `main.jsx` so the auto-update-on-version-bump works with the new build-version scheme, then rebuild.
+
+
+## 16/09/2026, 23:22:08
+
+
+
+
+
+## 16/09/2026, 23:22:16
+
+
+
+`main.jsx`'s `checkVersion()` is already correct — it compares `marina_app_version` against `/api/version`, which now returns a fresh build-version per build. Let me clean up temp scripts and rebuild.
+
+
+
+
+## 16/09/2026, 23:22:20
+
+
+
+
+
+## 16/09/2026, 23:22:20
+
+
+
+
+
+## 16/09/2026, 23:22:27
+
+
+
+
+
+## 16/09/2026, 23:22:28
+
+
+
+Now verify the viewport in both HTML files, then rebuild and deploy.
+
+
+## 16/09/2026, 23:22:32
+
+
+
+
+
+## 16/09/2026, 23:22:36
+
+
+
+Build succeeded with a unique version: `1.1.9+20260916202227-b054b18`. Let me verify the outputs are correct.
+
+
+## 16/09/2026, 23:22:37
+
+
+
+
+
+## 16/09/2026, 23:22:42
+
+
+
+
+
+## 16/09/2026, 23:22:44
+
+
+
+
+
+## 16/09/2026, 23:22:48
+
+
+
+
+
+## 16/09/2026, 23:22:50
+
+
+
+
+
+## 16/09/2026, 23:22:55
+
+
+
+Let me verify both changes are in the built bundle.
+
+
+
+## 16/09/2026, 23:22:57
+
+
+
+Deployed bundle verified clean — `overflow:auto`, `width:100%; height:auto; display:block`, no transform/touch handlers. Now I need to deploy. Let me check for a deploy target.
+
+## 16/09/2026, 23:23:04
+
+
+
+
+
+## 16/09/2026, 23:23:05
+
+
+
+Let me confirm both changes are in the built bundle with a targeted check.
+
+## 16/09/2026, 23:23:10
+
+
+
+
+
+## 16/09/2026, 23:23:12
+
+
+
+Both changes are confirmed in the built bundle. Let me verify `build-version.json` is in `dist/` (where the server reads it).
+
+## 16/09/2026, 23:23:15
+
+
+
+
+
+## 16/09/2026, 23:23:19
+
+
+
+`build-version.json` is at the repo root where `server.js` reads it. Let me confirm it's not gitignored and add it to the gitignore exclusion list if needed.
+
+
+## 16/09/2026, 23:23:20
+
+
+
+
+
+## 16/09/2026, 23:23:26
+
+
+
+
+
+## 16/09/2026, 23:23:27
+
+
+
+`build-version.json` is a build artifact — let me add it to `.gitignore` so it's not committed as stale metadata.
+
+## 16/09/2026, 23:23:34
+
+
+
+
+
+## 16/09/2026, 23:23:37
+
+
+
+Build is done and verified. `dist/` is gitignored so I can't push it — here's what you need to do.
+
+## Done
+
+**Zoom — went native, deleted the JS entirely** (`src/screens/CardDetailScreen.jsx`):
+- Removed `zoom`, `lastTap`, `touchRef` state and the `zoomImg`/`resetZoom`/`onDoubleTap` handlers
+- img style back to `width:100%; height:auto; display:block` — no `touchAction`, no `transform`, no `onTouch*`, no `onDoubleClick`
+- Container keeps `overflow:auto` + `WebkitOverflowScrolling: touch` so a tall photo scrolls
+- Verified in the rebuilt `dist/assets/index-kNQxsjvk.js`: `overflow:auto`, `width:100%,height:auto,display:block`, zero touch/transform handlers
+
+**Viewport** — `index.html` + `dist/index.html` now `user-scalable=yes` (was `no`).
+
+**GPS fix** — picker opens immediately, GPS runs in the background; `captureGPS` timeout 10s→4s.
+
+## What you must do
+
+The production server serves its own copy of `dist/` (`server.js:177` → `path.join(__dirname, 'dist')`), so the local build isn't live. Upload the rebuilt `dist/`:
+
+```
+dist/index.html
+dist/manifest.json
+dist/manifest.webmanifest
+dist/registerSW.js
+dist/sw.js
+dist/assets/*
+dist/favicon.png
+dist/icon-192.png
+dist/icon-512.png
+```
+
+Then restart the Node app and **reinstall the PWA** (uninstall + install) so the new SW/bundle takes effect.
+
+## PWA / alt-tab question (still open)
+
+That's a separate issue from zoom. The manifest is referenced as `/manifest.json` (absolute root) and icons as `/icon-192.png`. Chrome only offers install when the site is **HTTPS** and the manifest resolves at the URL the page loads from. If the app is served at a subpath, Chrome looks for the manifest at the domain root and won't show install — that's why it shows as Firefox. Check: is the app at HTTPS, and at what path?
+## 16/09/2026, 23:23:45
+
+
+
+
+
+## 16/09/2026, 23:23:54
+
+
+
+
+
+## 16/09/2026, 23:24:00
+
+
+
+
+
+## 16/09/2026, 23:24:07
+
+
+
+
+
+## 16/09/2026, 23:24:13
+
+
+
+
+
+## 16/09/2026, 23:24:19
+
+
+
+
+
+## 16/09/2026, 23:24:25
+
+
+
+
+
+## 16/09/2026, 23:24:32
+
+
+
+
+
+## 16/09/2026, 23:24:37
+
+
+
+
+
+## 16/09/2026, 23:24:44
+
+
+
+Let me do a final clean build to verify everything is consistent end-to-end.
+
+
+
+## 16/09/2026, 23:24:54
+
+
+
+Build is clean and reproducible. Let me verify the final state of the key files.
+
+

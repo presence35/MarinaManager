@@ -1336,28 +1336,6 @@ function PhotosTab({ card, reload }) {
   const fileRef = useRef(null)
   const gpsCache = useRef(null)
   const [fullscreen, setFullscreen] = useState(null)
-  const [zoom, setZoom] = useState(1)
-  const lastTap = useRef(0)
-  const touchRef = useRef(null)
-
-  const zoomImg = (e) => {
-    if (e.touches.length === 2) {
-      const d = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      )
-      const prev = touchRef.current?.dist || d
-      const scale = Math.max(1, Math.min(5, zoom * (d / prev)))
-      touchRef.current = { dist: d }
-      setZoom(scale)
-    }
-  }
-  const resetZoom = () => { touchRef.current = null; setZoom(1) }
-  const onDoubleTap = () => {
-    const now = Date.now()
-    if (now - lastTap.current < 300) { setZoom(z => (z > 1.2 ? 1 : 2.5)); lastTap.current = 0 }
-    else lastTap.current = now
-  }
 
   const upload = async (file) => {
     setUploading(true)
@@ -1431,19 +1409,12 @@ function PhotosTab({ card, reload }) {
         </div>
       )}
       {fullscreen && (
-        <div className="modal-overlay" onClick={() => { setFullscreen(null); resetZoom() }} style={{ alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div className="modal-overlay" onClick={() => setFullscreen(null)} style={{ alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#000', borderRadius: 12, overflow: 'auto', maxWidth: '100%', maxHeight: '80dvh', position: 'relative', WebkitOverflowScrolling: 'touch' }}>
-            <img src={`/photos/${fullscreen.filename}`} alt=""
-              style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'manipulate', transformOrigin: 'center center', transform: `scale(${zoom})`, transition: 'transform .15s ease' }}
-              onTouchStart={zoomImg}
-              onTouchMove={(e) => { e.preventDefault(); zoomImg(e) }}
-              onTouchEnd={resetZoom}
-              onDoubleClick={onDoubleTap}
-              onClick={onDoubleTap}
-            />
+            <img src={`/photos/${fullscreen.filename}`} style={{ width: '100%', height: 'auto', display: 'block' }} alt="" />
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(0,0,0,.8)' }}>
               <span style={{ color: '#fff', fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{fullscreen.photo_type}</span>
-              <button onClick={() => { deletePhoto(fullscreen.id); setFullscreen(null); resetZoom() }}
+              <button onClick={() => { deletePhoto(fullscreen.id); setFullscreen(null) }}
                 style={{ background: 'rgba(214,64,69,.8)', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 10px', fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 12, cursor: 'pointer', letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 DELETE
               </button>

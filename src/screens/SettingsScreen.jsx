@@ -38,6 +38,21 @@ export default function SettingsScreen() {
     URL.revokeObjectURL(url)
   }
 
+  async function clearCache() {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('marina_')) localStorage.removeItem(key)
+    }
+    if ('caches' in window) {
+      const names = await caches.keys()
+      await Promise.all(names.map(n => caches.delete(n)))
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map(r => r.unregister()))
+    }
+    window.location.href = window.location.href
+  }
+
   return (
     <div>
       <div className="section-head">Theme</div>
@@ -125,9 +140,9 @@ export default function SettingsScreen() {
         <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--danger)' }}>Sign Out {employee?.name}</span>
       </button>
 
-      <div style={{ textAlign: 'center', padding: '24px 16px', fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.5 }}>
-        MARINA MANAGER v{version} {'\u00B7'} CAMPBELL'S LANDING
-      </div>
+      <button onClick={clearCache} title="Clear cache and reload with the latest deployed build" style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'center', padding: '24px 16px', fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.5 }}>
+        MARINA MANAGER v{version} · CAMPBELL'S LANDING
+      </button>
     </div>
   )
 }

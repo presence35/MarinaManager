@@ -325,3 +325,14 @@ make the necessary fix/changes
 ## 16/09/2026, 23:07:31
 
 it shows the app belongs to firefox when i alt tab (android).    why doesn't it shows pwa stuff for MM?
+## 16/09/2026, 23:12:26
+
+p&z doesn't work.  i reinstalled the app on chrome pixel7
+## 16/09/2026, 23:20:10
+
+dbl tap doesn't work.    why so diffiuclt to make p&z work natively on chrome pwa!
+
+
+## 16/09/2026, 23:21:51
+
+native for now.  go

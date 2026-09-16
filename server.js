@@ -862,7 +862,17 @@ module.exports = async function createApp() {
   }));
 
   app.get('/api/version', (req, res) => {
-    res.json({ version: JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version });
+    // Serve the LIVE build version (build-version.json written by `npm run build`),
+    // falling back to package.json. This is read from disk at request time, so it
+    // always reflects the currently deployed build — never a cached/old value.
+    let version;
+    try {
+      const bv = JSON.parse(fs.readFileSync(path.join(__dirname, 'build-version.json'), 'utf8'));
+      version = bv.version;
+    } catch (e) {
+      version = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
+    }
+    res.json({ version });
   });
 
   app.get('/api/public/card/:token', asyncHandler(async (req, res) => {

@@ -1,12 +1,13 @@
 {
   "name": "marina-repair-app",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "Campbell's Landing Marina - Service & Storage Management",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",
     "dev:server": "node server.js",
     "dev:vite": "vite",
+    "prebuild": "node scripts/gen-version.js",
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.js"
