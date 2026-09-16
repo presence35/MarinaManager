@@ -74,6 +74,13 @@ module.exports = async function createApp() {
     // Column already exists, ignore
   }
 
+  try {
+    await db.exec("ALTER TABLE service_cards ADD COLUMN unwrap_done INTEGER DEFAULT 0");
+    console.log("  Added unwrap_done column to service_cards");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   function generateCustomerToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let token = '';
@@ -519,7 +526,7 @@ module.exports = async function createApp() {
     if (!card) return res.status(404).json({ error: 'Not found' });
 
     const isEditor = req.employee.role === 'admin' || req.employee.role === 'office';
-    const { status, storage_type, storage_location, wrap_required, remarks, other_work, date_out, invoice_number, work_order_no, storage_building, storage_row, storage_col, boathouse_no, slip_no, pickup_delivery, is_scanned } = req.body;
+    const { status, storage_type, storage_location, wrap_required, unwrap_done, remarks, other_work, date_out, invoice_number, work_order_no, storage_building, storage_row, storage_col, boathouse_no, slip_no, pickup_delivery, is_scanned } = req.body;
 
     if (!isEditor) {
        const protectedKeys = ['storage_type', 'storage_location', 'wrap_required', 'remarks', 'other_work', 'date_out', 'invoice_number', 'work_order_no', 'storage_building', 'storage_row', 'storage_col', 'boathouse_no', 'slip_no', 'pickup_delivery', 'is_scanned'];
@@ -553,13 +560,14 @@ module.exports = async function createApp() {
       boathouse_no = COALESCE(?, boathouse_no),
       slip_no = COALESCE(?, slip_no),
       wrap_required = COALESCE(?, wrap_required),
+      unwrap_done = COALESCE(?, unwrap_done),
       remarks = COALESCE(?, remarks), other_work = COALESCE(?, other_work),
       date_out = COALESCE(?, date_out), invoice_number = COALESCE(?, invoice_number),
       work_order_no = COALESCE(?, work_order_no),
-      pickup_delivery = COALESCE(?, pickup_delivery),
+      pickup_delivery = ?,
       is_scanned = COALESCE(?, is_scanned),
       updated_at = NOW()
-      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, pickup_delivery ?? null, is_scanned != null ? (is_scanned ? 1 : 0) : null, id);
+      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, unwrap_done != null ? (unwrap_done ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, pickup_delivery ?? null, is_scanned != null ? (is_scanned ? 1 : 0) : null, id);
     res.json({ ok: true });
   }));
 

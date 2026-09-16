@@ -200,3 +200,12 @@ go
 ## 16/09/2026, 22:26:01
 
 [2026-09-15 12:04 AM] jamss: Still failed to save shronk rrap complete[2026-09-15 12:05 AM] jamss: Ooh, and i tried to tap pickup/delivery. It saves that but cant uncheck after if oops
+## 16/09/2026, 22:27:56
+
+ok.  and schema needs to be rerun.  how to do it?
+## 16/09/2026, 22:29:10
+
+done?
+## 16/09/2026, 22:29:39
+
+what's w the random 0 that shows up here all the time.

@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS service_cards (
   boathouse_no INTEGER,
   slip_no INTEGER,
   wrap_required INTEGER DEFAULT 0,
+  unwrap_done INTEGER DEFAULT 0,
   remarks TEXT,
   other_work TEXT,
   date_in TEXT,

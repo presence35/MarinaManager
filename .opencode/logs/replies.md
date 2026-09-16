@@ -1497,3 +1497,138 @@ The fix is complete and verified. Here's a summary of the changes made to `serve
 3. **`server.js:804, 807`** — Applied it to `completed_at` in both checklist completion endpoints (UPDATE and INSERT), which had the same ISO format issue
 
 All other date fields (`date_in`, `date_out`, `log_date`) were already using `YYYY-MM-DD` format and are compatible with both SQLite and MySQL.
+## 16/09/2026, 22:26:09
+
+
+
+I'll investigate both issues. Let me search for the relevant code.
+
+## 16/09/2026, 22:26:15
+
+
+
+
+
+## 16/09/2026, 22:26:27
+
+
+
+Let me look at the server's card update endpoint and the Unwrap toggle logic.
+
+## 16/09/2026, 22:26:43
+
+
+
+
+
+## 16/09/2026, 22:26:59
+
+
+
+I have enough to identify both bugs. Let me verify the `unwrap_done` column situation and check the schema.
+
+
+## 16/09/2026, 22:27:14
+
+
+
+I've identified both bugs. Here's my analysis:
+
+## Bug 1: Shrink wrap complete won't save
+
+**Root cause:** The `unwrap_done` field doesn't exist anywhere on the server side.
+
+- `CardDetailScreen.jsx:819` sends `PUT /cards/:id { unwrap_done: next }`
+- But `server.js:522` destructures the card body and `unwrap_done` is **not** in the destructured list
+- `server.js:547-562` UPDATE statement doesn't include `unwrap_done`
+- `db/schema.sql:50-72` `service_cards` table has no `unwrap_done` column
+
+So the toggle is silently ignored — the state never persists. The frontend `unwrapDone` local state flips, but `reload()` restores the old value from the server.
+
+## Bug 2: Can't uncheck pickup/delivery
+
+**Root cause:** `server.js:559` uses:
+```sql
+pickup_delivery = COALESCE(?, pickup_delivery)
+```
+
+When the user taps to uncheck, `CardDetailScreen.jsx:1054` correctly sends `null`:
+```js
+onClick={() => setPickupDelivery(isActive ? null : type)}
+```
+
+But `COALESCE(null, pickup_delivery)` returns the **existing** value, so the field never clears. It can be set but never unset.
+
+## Proposed fixes
+
+**File 1: `db/schema.sql`** — add column
+```sql
+unwrap_done INTEGER DEFAULT 0,
+```
+(placed after `wrap_required`)
+
+**File 2: `server.js`** — 3 changes
+1. Add `unwrap_done` to the destructured body at line 522
+2. Add `unwrap_done = COALESCE(?, unwrap_done)` to the UPDATE at line 555 (after `wrap_required`)
+3. Fix line 559: change `pickup_delivery = COALESCE(?, pickup_delivery)` to `pickup_delivery = ?` so `null` actually clears the field
+
+**File 3: `src/screens/CardDetailScreen.jsx`** — no changes needed (both call sites are already correct)
+
+**Note on `unwrap_done` migration:** Since `db/schema.sql` uses `CREATE TABLE IF NOT EXISTS`, existing databases won't get the new column automatically. I'll add a one-time `ALTER TABLE` migration in `server.js` (same pattern as the existing `gps_lng` migration at line 70-75) so existing cards work too.
+
+Want me to proceed with these three changes?
+## 16/09/2026, 22:28:04
+
+
+
+Applying the fixes now.
+
+**1. Add `unwrap_done` column to schema**
+
+## 16/09/2026, 22:28:10
+
+
+
+**2. Add migration for existing databases + fix server.js**
+
+Let me look at the existing migration pattern first:
+
+## 16/09/2026, 22:28:16
+
+
+
+
+
+## 16/09/2026, 22:28:25
+
+
+
+**3. Update server.js destructuring + UPDATE statement**
+
+
+## 16/09/2026, 22:28:31
+
+
+
+
+
+## 16/09/2026, 22:28:50
+
+
+
+I need to check if the existing card value is available in scope, since `COALESCE` can't distinguish "omitted" from "explicitly cleared":
+
+
+
+## 16/09/2026, 22:29:23
+
+
+
+Not yet — still need to finish the server.js UPDATE statement. Let me complete it.
+
+## 16/09/2026, 22:29:33
+
+
+
+Now let me verify syntax and check the protectedKeys list is consistent:
+
