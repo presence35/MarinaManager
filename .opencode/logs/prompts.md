@@ -295,3 +295,33 @@ Please investigate and report back with EXACT line numbers and code snippets:
 4. Check `public/manifest.json` and any `metadata.json` for version fields.
 
 Report exact line numbers and verbatim code. Do NOT edit anything - research only.
+## 16/09/2026, 23:03:01
+
+I'm planning a change to the Marina Manager app (a React 19 PWA in D:\Desktop\marine). I need users to be able to clear the browser cache and force a hard refresh of the app from within the app itself (Settings screen).
+
+Please investigate and report back with EXACT line numbers and code snippets:
+
+1. `src/sw.js` - Read the whole file. I need to know:
+   - What caching strategy is used (Workbox precache? runtime caching?)
+   - The cache names / cache key prefixes used
+   - Whether there's any existing `skipWaiting` or `message` logic to update the SW
+
+2. `vite.config.js` - Read the whole file. I need:
+   - The PWA plugin config (`vite-plugin-pwa`) - what `injectManifest` settings, `disableManifest`, etc.
+   - Whether the SW is auto-generated or custom
+
+3. `index.html` (root, not public/) - search for any `<meta name="version">`, `theme-color`, or app-shell markup.
+
+4. Search the codebase (src/, root files) for any existing calls to `caches.delete`, `registration.unregister`, `window.location.reload`, `import.meta.env`, or `navigator.serviceWorker` to see if there's any existing cache-clear or update mechanism.
+
+Report exact line numbers and verbatim code. Do NOT edit anything - research only.
+## 16/09/2026, 23:06:08
+
+i deployed twice.
+
+the version isn't auto bumping when i build.
+
+make the necessary fix/changes
+## 16/09/2026, 23:07:31
+
+it shows the app belongs to firefox when i alt tab (android).    why doesn't it shows pwa stuff for MM?

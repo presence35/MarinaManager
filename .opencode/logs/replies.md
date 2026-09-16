@@ -2819,3 +2819,675 @@ Now let me verify the edits and rebuild `dist/`.
 
 
 Build succeeded. Let me verify the deployed `dist/` now contains the fixes.
+
+## 16/09/2026, 23:03:00
+
+
+
+I'll investigate all the files in parallel to be efficient.
+
+
+
+
+## 16/09/2026, 23:03:01
+
+
+
+
+
+
+## 16/09/2026, 23:03:05
+
+
+
+
+
+## 16/09/2026, 23:03:06
+
+
+
+Good. Now let me check for `metadata.json`, the `/api/version` endpoint, the service worker, and the CSS classes used in the settings screen.
+
+
+
+
+
+
+## 16/09/2026, 23:03:06
+
+
+
+I'll investigate the codebase thoroughly. Let me start with parallel reads and searches.
+
+
+
+
+## 16/09/2026, 23:03:12
+
+
+
+Now let me read the server (for the `/api/version` endpoint), the service worker, and search for version-related logic across the codebase.
+
+
+
+
+
+
+## 16/09/2026, 23:03:12
+
+
+
+Now let me read the root `index.html` and search for the cache-clear/update mechanisms in parallel:
+
+
+
+## 16/09/2026, 23:03:12
+
+
+
+
+
+## 16/09/2026, 23:03:17
+
+
+
+Now let me find the CSS that defines the styling classes used in the Settings screen, and check for any metadata files or version constants.
+
+
+
+
+
+
+
+
+## 16/09/2026, 23:03:20
+
+
+
+The grep matched source files I need to read. Let me read the key source files and check for a `public/` directory and `manifest.json` in parallel.
+
+
+
+
+
+## 16/09/2026, 23:03:20
+
+
+
+
+
+## 16/09/2026, 23:03:24
+
+
+
+No CSS files found — the styling classes must be defined somewhere. Let me search for them and check the entry HTML and any global styles.
+
+
+
+
+
+
+
+## 16/09/2026, 23:03:25
+
+
+
+Let me do a final check on package.json and any SW registration logic in src/.
+
+
+
+
+## 16/09/2026, 23:03:26
+
+
+
+
+
+## 16/09/2026, 23:03:31
+
+
+
+
+
+## 16/09/2026, 23:03:33
+
+
+
+The CSS classes are defined in `index.html`. Let me read the relevant sections and check for `metadata.json` at the root level.
+
+
+
+
+
+
+
+
+## 16/09/2026, 23:03:36
+
+
+
+
+
+## 16/09/2026, 23:03:40
+
+
+
+The glob didn't find `metadata.json`, but a prior log mentioned it at the root. Let me verify with bash and read the rest of the relevant CSS classes.
+
+
+## 16/09/2026, 23:03:41
+
+
+
+
+
+## 16/09/2026, 23:03:46
+
+
+
+
+
+## 16/09/2026, 23:03:53
+
+
+
+
+
+## 16/09/2026, 23:03:58
+
+
+
+
+
+## 16/09/2026, 23:04:02
+
+
+
+I have all the information needed. Here is the full report.
+
+---
+
+## Research Report: Cache-Clear / Hard-Refresh Mechanism
+
+### 1. `src/sw.js` — Service Worker (18 lines, verbatim)
+
+Full file:
+
+```js
+1:  import { precacheAndRoute } from 'workbox-precaching'
+2:  import { skipWaiting, clientsClaim } from 'workbox-core'
+3:
+4:  precacheAndRoute(self.__WB_MANIFEST)
+5:  skipWaiting()
+6:  clientsClaim()
+7:
+8:  self.addEventListener('fetch', e => {
+9:    const url = new URL(e.request.url)
+10:   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/photos/')) {
+11:     e.respondWith(
+12:       fetch(e.request).catch(() => new Response(JSON.stringify({ error: 'Offline' }), {
+13:         headers: { 'Content-Type': 'application/json' }, status: 503
+14:       }))
+15:     )
+16:     return
+17:   }
+18: })
+```
+
+**Answers to your questions:**
+
+- **Caching strategy:** Workbox **precache only**. `precacheAndRoute(self.__WB_MANIFEST)` (line 4) — the manifest is injected at build time by `vite-plugin-pwa`. There is **no runtime caching** (no `streategies`/`cacheFirst`/`networkFirst`/`staleWhileRevalidate`). The only runtime logic is a custom `fetch` handler (lines 8–18) that sends `/api/` and `/photos/` requests **network-only** with a JSON 503 `{ error: 'Offline' }` fallback. Everything else falls through to the precache.
+- **Cache names / key prefixes:** **None specified in the SW.** Workbox's `precacheAndRoute` uses the default cache name `workbox-precache-v${self.__WB_MANIFEST_HASH}` (or similar — the prefix is `workbox-precache-`); no custom `cacheName` or `cacheKeyPrefix` is set anywhere (not in `sw.js`, not in `vite.config.js`).
+- **`skipWaiting` / message logic:** `skipWaiting()` (line 5) and `clientsClaim()` (line 6) are present, so a new SW takes over immediately without user interaction. **There is NO `message` event listener** (`self.addEventListener('message', ...)`) and **no `importWBUpdate`/`importWBManifest`/`clientsClaim` message-based update prompt** in the SW itself. Update prompting is handled on the **page side** by the plugin (see item 2).
+
+---
+
+### 2. `vite.config.js` — PWA Plugin Config (42 lines, verbatim)
+
+```js
+1:  import { defineConfig } from 'vite'
+2:  import react from '@vitejs/plugin-react'
+3:  import { VitePWA } from 'vite-plugin-pwa'
+4:
+5:  export default defineConfig({
+6:    plugins: [
+7:      react(),
+8:      VitePWA({
+9:        strategies: 'injectManifest',
+10:        srcDir: 'src',
+11:        filename: 'sw.js',
+12:        registerType: 'autoUpdate',
+13:        manifest: {
+14:          name: 'Marina Manager',
+15:          short_name: 'Marina',
+16:          description: "Campbell's Landing Marina — Service & Storage Management",
+17:          start_url: '/',
+18:          display: 'standalone',
+19:          orientation: 'portrait',
+20:          background_color: '#0a4f6e',
+21:          theme_color: '#0a4f6e',
+22:          icons: [
+23:            { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+24:            { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+25:          ],
+26:        },
+27:        injectManifest: {
+28:          globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+29:        },
+30:      }),
+31:    ],
+32:  base: '/',
+33:  build: {
+34:    outDir: 'dist',
+35:  },
+36:  server: {
+37:    proxy: {
+38:      '/api': 'http://localhost:3000',
+39:      '/photos': 'http://localhost:3000',
+40:    },
+41:  },
+42: })
+```
+
+**Answers:**
+
+- **SW is CUSTOM, not auto-generated.** `strategies: 'injectManifest'` (line 9) with `srcDir: 'src'` (line 10) and `filename: 'sw.js'` (line 11) means the plugin reads your hand-written `src/sw.js`, injects `self.__WB_MANIFEST` into it, and emits the final SW. `disableManifest` is **not set** (defaults to `false`), so the web manifest is generated normally.
+- **`injectManifest` settings:** only `globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}']` (line 28) — controls which files get precached.
+- **`registerType: 'autoUpdate'`** (line 12) — this is the key one. With `autoUpdate`, `vite-plugin-pwa` injects SW registration code into the bundle that **automatically skips waiting and reloads the page** when a new SW is found (no `importWBManifest`/manual prompt). So the plugin already wires up an auto-update path — but it is **injected at build time into `main.jsx`'s bundle**, not visible as source in `src/`.
+- **No `disableManifest`, `mode`, `includeAssets`, or `workbox` runtime config** beyond the above.
+
+---
+
+### 3. `index.html` (root, 1092 lines)
+
+- **`<meta name="version">` — NOT present.** There is no version meta tag anywhere in the file.
+- **`theme-color` — present at line 14:**
+  ```html
+  14:   <meta name="theme-color" content="#0a4f6e" />
+  ```
+  (matches `background_color`/`theme_color` in `vite.config.js` line 20–21)
+- **App-shell markup — CSS class exists, but no static HTML shell.**
+  ```html
+  170:   .app-shell {
+  171:     display: flex;
+  172:     flex-direction: column;
+  173:     height: 100%;
+  174:     height: 100dvh;
+  175:     overflow: hidden;
+  176:   }
+  ```
+  The `<body>` (lines 1088–1091) contains only:
+  ```html
+  1089:     <div id="root"></div>
+  1090:     <script type="module" src="/src/main.jsx"></script>
+  ```
+  No `<nav>`, header, or shell markup in the HTML — the shell is rendered by React via `#root`. There is **no `<link rel="manifest">`** issue — it's at line 18: `<link rel="manifest" href="/manifest.json" />`. No SW `<script>` registration in the HTML either (that's injected by the plugin into the JS bundle).
+
+---
+
+### 4. Existing Cache-Clear / Update Mechanism in `src/`
+
+**A. `src/main.jsx` — `checkVersion()` (lines 4–32) — THIS IS THE EXISTING MECHANISM**
+
+```js
+4:  async function checkVersion() {
+5:    try {
+6:      const res = await fetch('/api/version')
+7:      if (!res.ok) return
+8:      const { version } = await res.json()
+9:      const stored = localStorage.getItem('marina_app_version')
+10:      if (stored && stored !== version) {
+11:        const overlay = document.createElement('div')
+12:        overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;...'
+13:        overlay.textContent = 'Updating app...'
+14:        document.body.appendChild(overlay)
+15:        for (const key of Object.keys(localStorage)) {
+16:          if (key.startsWith('marina_')) localStorage.removeItem(key)
+17:        }
+18:        if ('caches' in window) {
+19:          const names = await caches.keys()
+20:          await Promise.all(names.map(n => caches.delete(n)))
+21:        }
+22:        if ('serviceWorker' in navigator) {
+23:          const regs = await navigator.serviceWorker.getRegistrations()
+24:          await Promise.all(regs.map(r => r.unregister()))
+25:        }
+26:        localStorage.setItem('marina_app_version', version)
+27:        window.location.href = window.location.href
+28:        return
+29:        }
+30:      if (!stored) localStorage.setItem('marina_app_version', version)
+31:    } catch {}
+32:  }
+33:
+34:  checkVersion().then(() => {
+35:    const root = createRoot(document.getElementById('root'))
+36:    root.render(<App />)
+37:  })
+```
+
+This is a **server-driven version check** (`/api/version`) that, on version bump: clears all `marina_*` localStorage keys (line 16), **deletes every cache** via `caches.delete(n)` (lines 19–20), **unregisters the SW** via `navigator.serviceWorker.getRegistrations()` + `r.unregister()` (lines 23–24), then reloads (line 27). It runs **once, before React mounts**, on every app load.
+
+**B. `src/api.js` line 20 — 401 reload:**
+```js
+20:      window.location.reload()
+```
+Triggers when the server returns 401 (session expired). Clears token/employee in lines 18–19 first.
+
+**C. `src/screens/SettingsScreen.jsx` line 32 — 401 reload during export:**
+```js
+32:      localStorage.removeItem('marina_token'); localStorage.removeItem('marina_employee'); window.location.reload(); return
+```
+Same pattern, inline in `handleExport`.
+
+**D. No `import.meta.env` usage anywhere in `src/`.**
+
+**E. No `caches.delete` / `registration.unregister` / `navigator.serviceWorker` calls anywhere else** — only `main.jsx` lines 19–24 and the SW's own `skipWaiting()`.
+
+---
+
+### Summary for your Settings-screen feature
+
+- The app already has a **server-triggered hard cache-clear** in `main.jsx` (`checkVersion`, lines 4–32) that deletes all caches + unregisters the SW + wipes `marina_*` localStorage + reloads — but it is **automatic on version bump**, not user-initiated, and it runs before the UI exists.
+- For a **user-triggered** "clear cache + hard refresh" in Settings, you would essentially replicate `main.jsx` lines 18–27 (the `caches.keys()`/`caches.delete()` block, `navigator.serviceWorker.getRegistrations()`/`unregister()` block, and `window.location.reload()` / `window.location.href = window.location.href`) behind a button handler in `SettingsScreen.jsx`.
+- Note the SW has **no `message` listener**, so a `postMessage`-based "skip waiting" approach would need a new `self.addEventListener('message', ...)` in `src/sw.js` — but since `skipWaiting()` is already called unconditionally (line 5) and `registerType: 'autoUpdate'` is set, the page-side `unregister()` + reload approach (as in `main.jsx`) is the path of least resistance.
+- The `registerType: 'autoUpdate'` injection happens at build time; if you want to switch to a manual update prompt (`importWBManifest`/`manual`) you'd change `vite.config.js` line 12.
+
+Research only — no files were edited.
+## 16/09/2026, 23:04:04
+
+
+
+
+
+## 16/09/2026, 23:04:11
+
+
+
+
+
+## 16/09/2026, 23:04:21
+
+
+
+I now have everything. Here is the full research report.
+
+---
+
+## 1. `src/screens/SettingsScreen.jsx` (133 lines)
+
+**Overall structure** — a single `<div>` containing, in order:
+1. **Theme section** — `.section-head` "Theme" (line 43), `.day-night-toggle` (line 44), `.theme-grid` of `.theme-card`s (lines 52-68)
+2. **Lists section** (admin only) — `.section-head` "Lists" (line 70) + `.card` with 4 navigation buttons (lines 72-93)
+3. **Export section** (admin only) — `.section-head` "Export" (line 96) + `.card` with `handleExport` button and recent-backups list (lines 97-121)
+4. **Sign Out** — `.sign-out-btn` (lines 123-126)
+5. **Version footer** (lines 128-130)
+
+**Version is ALREADY rendered** at the bottom. Verbatim:
+
+```jsx
+128:       <div style={{ textAlign: 'center', padding: '24px 16px', fontFamily: 'Barlow Condensed', fontSize: 11, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.5 }}>
+129:         MARINA MANAGER v{version} {'\u00B7'} CAMPBELL'S LANDING
+130:       </div>
+```
+
+It is driven by state fetched at lines 13-18:
+
+```jsx
+13:   const [version, setVersion] = useState('')
+...
+16:   useEffect(() => {
+17:     fetch('/api/version').then(r => r.json()).then(d => setVersion(d.version)).catch(() => {})
+18:   }, [])
+```
+
+**Action-item patterns** — there is no `.setting-item` class anywhere in the codebase. Actions are rendered two ways:
+
+- *Inline full-width button in a `.card`* (the "action" pattern used for Export, lines 97-103):
+```jsx
+97:       {employee?.role === 'admin' && (
+98:         <div className="card" style={{ margin: '0 12px' }}>
+99:           <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}>
+100:             <Icon name="download" size={18} color="var(--text2)" />
+101:             <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Export Database (ZIP)</span>
+102:             <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
+103:           </button>
+```
+  The `handleExport` handler (lines 29-39) does a fetch, blob download, and on 401 clears `localStorage` items and `window.location.reload()`s.
+
+- *Standalone button using a CSS class* (Sign Out, lines 123-126):
+```jsx
+123:       <button onClick={logout} className="sign-out-btn">
+124:         <Icon name="anchor" size={18} color="var(--danger)" />
+125:         <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--danger)' }}>Sign Out {employee?.name}</span>
+126:       </button>
+```
+
+**Styling classes used** (all defined in `index.html`, not a separate CSS file):
+- `.section-head` — lines 265-272: `font-family: "Bebas Neue"`, 16px, `letter-spacing: 1.5px`, `text-transform: uppercase`, `padding: 18px 16px 8px`
+- `.card` — lines 256-261: `background: var(--surface)`, `border-radius: var(--r)`, `border: 1px solid var(--border)`, `overflow: hidden`
+- `.sign-out-btn` — lines 273-286: flex row, `gap: 12px`, `padding: 14px 16px`, `width: calc(100% - 24px)`, `margin: 18px auto 0`, `background: var(--surface)`, `border: 1px solid var(--border)`, `border-radius: var(--r)`
+- `.theme-grid` — lines 810-815: 2-column grid, `gap: 10px`, `padding: 12px 16px`
+- `.theme-card` / `.theme-card.selected` — lines 816-826
+- `.day-night-toggle` / `.dnt-btn` / `.dnt-btn.active` — lines 843-867
+
+Note: `.setting-item` does **not** exist anywhere — it was mentioned in a prior session's prompt but was never implemented.
+
+---
+
+## 2. `src/main.jsx` (37 lines) — the "version-check overlay"
+
+The entire file:
+
+```jsx
+1:  import { createRoot } from 'react-dom/client'
+2:  import App from './App'
+3:
+4:  async function checkVersion() {
+5:    try {
+6:      const res = await fetch('/api/version')
+7:      if (!res.ok) return
+8:      const { version } = await res.json()
+9:      const stored = localStorage.getItem('marina_app_version')
+10:      if (stored && stored !== version) {
+11:        const overlay = document.createElement('div')
+12:        overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0a4f6e;color:#fff;font-family:Barlow,sans-serif;font-size:18px;letter-spacing:1px;'
+13:        overlay.textContent = 'Updating app...'
+14:        document.body.appendChild(overlay)
+15:        for (const key of Object.keys(localStorage)) {
+16:          if (key.startsWith('marina_')) localStorage.removeItem(key)
+17:        }
+18:        if ('caches' in window) {
+19:          const names = await caches.keys()
+20:          await Promise.all(names.map(n => caches.delete(n)))
+21:        }
+22:        if ('serviceWorker' in navigator) {
+23:          const regs = await navigator.serviceWorker.getRegistrations()
+24:          await Promise.all(regs.map(r => r.unregister()))
+25:        }
+26:        localStorage.setItem('marina_app_version', version)
+27:        window.location.href = window.location.href
+28:        return
+29:      }
+30:      if (!stored) localStorage.setItem('marina_app_version', version)
+31:    } catch {}
+32:  }
+33:
+34:  checkVersion().then(() => {
+35:    const root = createRoot(document.getElementById('root'))
+36:    root.render(<App />)
+37:  })
+```
+
+How it works:
+- **Version source:** `fetch('/api/version')` (line 6) — plain HTTP GET, no auth.
+- **Comparison:** string equality against `localStorage.getItem('marina_app_version')` (line 9). No semver parsing — pure `!==`.
+- **Mismatch path (lines 10-28):** creates a full-screen overlay saying "Updating app...", wipes every `marina_*` localStorage key, deletes **all** `caches` via `caches.delete()`, unregisters **all** service workers, stores the new version, then does `window.location.href = window.location.href` to force a hard reload.
+- **First-run path (line 30):** just stores the version, no refresh.
+- **Error path (line 31):** all errors are silently swallowed.
+- **Timing:** runs before React mounts (line 34) — the overlay is appended to `document.body` before `root.render`.
+
+---
+
+## 3. `src/App.jsx` (86 lines) — version / localStorage / refresh logic
+
+There is **no version-check logic** in App.jsx. The only relevant bits:
+
+- **localStorage usage** (lines 63-64), inside a `useEffect` that re-validates the token on mount:
+```jsx
+62:         .catch(() => {
+63:           localStorage.removeItem('marina_token')
+64:           localStorage.removeItem('marina_employee')
+65:         })
+```
+- **No `window.location.reload()`** in App.jsx itself (that lives in `api.js` line 20 and `SettingsScreen.jsx` line 32).
+- The `marina_token` / `marina_employee` keys are the auth tokens; theme prefs live in `ThemeCtx.jsx` as `marina_theme` / `marina_dark` (lines 7-8). All four are `marina_*` keys, so the `main.jsx` cache-clear loop (lines 15-17) will wipe them on a version bump.
+
+---
+
+## 4. Version fields in `public/manifest.json` and metadata
+
+**`public/manifest.json` (16 lines)** — contains **no `version` field at all**. Fields present: `name`, `short_name`, `description`, `start_url`, `display`, `orientation`, `background_color`, `theme_color`, `permissions`, `categories`, `icons`.
+
+**`metadata.json`** — does **not exist** anywhere in the repo (verified via both `glob` and `Test-Path`; a prior session's logs reference it but the file is absent).
+
+**The single source of truth for the version string is `package.json`:**
+- `package.json` line 3: `"version": "1.1.9"`
+- `package-lock.json` line 3: `"version": "1.1.8"` (and line 9) — **discrepancy**: the lockfile still says 1.1.8, so the lockfile and package.json are out of sync.
+- `server.js` lines 864-866 is the only place the version is served:
+```js
+864:   app.get('/api/version', (req, res) => {
+865:     res.json({ version: JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version });
+866:   });
+```
+  It reads `package.json` at runtime, so the served version always tracks the `package.json` on disk (currently `1.1.9`).
+
+**Service worker** (`src/sw.js`, 18 lines) — Workbox `injectManifest` with `precacheAndRoute`, `skipWaiting`, `clientsClaim`. Its fetch handler (lines 8-17) is network-first for `/api/` and `/photos/`, falling back to an offline JSON error. It does **not** itself compare versions — versioning is driven by `main.jsx`'s `checkVersion()`.
+
+**Vite PWA config** (`vite.config.js`, lines 8-30) — `strategies: 'injectManifest'`, `registerType: 'autoUpdate'`, `globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}']`.
+
+---
+
+### Summary of the current state relevant to your change
+- A version string is **already displayed** in Settings (line 129) and **already fetched** from `/api/version` (line 17).
+- A **hard-refresh-on-version-mismatch** mechanism already exists in `main.jsx` (lines 4-32), but it is **untriggered from the Settings screen** — it only runs automatically at app load.
+- To add a "version" link in Settings that clears cache + forces a hard refresh, the natural insertion point is a new button in the Export/Lists `.card` (or its own `.card`), reusing the inline-button pattern at lines 97-103 or the `.sign-out-btn` pattern at lines 123-126, and calling a handler that performs the same cache-clear + `localStorage`-wipe + `window.location.href = window.location.href` sequence currently in `main.jsx` lines 15-27.
+- The "optionally check whether the app is the latest version" part can reuse the existing `fetch('/api/version')` call (line 17) and compare against the stored `marina_app_version` from `main.jsx`'s logic.
+## 16/09/2026, 23:04:21
+
+
+
+All changes verified in the freshly rebuilt `dist/`. Here's what was done:
+
+## GPS photo upload crash
+`src/screens/CardDetailScreen.jsx` — `captureGPS()` awaited **before** opening the file picker, so on devices with no GPS or denied permission the 10s high-accuracy timeout blocked the whole flow. Fixed all three photo handlers (Photos tab, checklist photos, location photos):
+
+- `captureGPS()` timeout `10000`→`4000`, `maximumAge: 0`→`10000` (allows a cached fix instead of hanging)
+- `handleUpload` / `handleCatPhoto` / `handleLocationPhoto` now open the picker **immediately** and run GPS in the background; the GPS result attaches to the upload when it resolves
+
+## Pinch-to-zoom on all photos
+- `index.html` + `dist/index.html` — viewport `user-scalable=no` → `user-scalable=yes` (was blocking all browser zoom app-wide)
+- Fullscreen photo now: `width:100%; height:auto` so it scales naturally, `touchAction: 'manipulate'`, and a JS zoom state (`1x–5x`) driven by two-finger pinch + double-tap to toggle 1x↔2.5x. Modal wrapper changed `overflow:hidden`→`overflow:auto` with `WebkitOverflowScrolling: touch` so it can scroll past viewport when zoomed. Reset on close.
+
+Build: `npm run build` ✓ — `dist/` regenerated, verified `user-scalable=yes`, `timeout:4e3`, `overflow:auto`, and `scale(${f})` present in the deployed bundle.
+## 16/09/2026, 23:04:49
+
+
+
+Let me verify the exact Settings screen structure before finalizing the plan.
+
+## 16/09/2026, 23:05:04
+
+
+
+Now I have the full picture. Here's the plan.
+
+## Current state
+
+- **Version already exists** in Settings: `SettingsScreen.jsx:128-130` renders `MARINA MANAGER v{version} · CAMPBELL'S LANDING`, fetched from `/api/version` (line 17). The version comes from `package.json` via `server.js:864-866`.
+- **A cache-clear + hard-refresh mechanism already exists** — `src/main.jsx:4-32` `checkVersion()`. On version bump it wipes `marina_*` localStorage, deletes all `caches`, unregisters the SW, and reloads. But it's **automatic at load time, not user-triggered**, and it runs before the UI exists.
+- **The `0` fix I applied** (`src/screens/CardDetailScreen.jsx:1868`) is correct — you just need to **rebuild and redeploy** so the served JS changes. The `dist/` build I ran is stale relative to what's actually served; a fresh `npm run build` + deploy is what makes it visible.
+
+## Plan
+
+Make the Settings version footer an interactive control that clears cache and forces a hard refresh, and also surfaces whether the app is current.
+
+**1. `src/screens/SettingsScreen.jsx`** — add a `clearCache` handler + make the version footer clickable:
+
+```jsx
+async function clearCache() {
+  // Wipe app-local state so nothing stale survives the reload
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('marina_')) localStorage.removeItem(key)
+  }
+  if ('caches' in window) {
+    const names = await caches.keys()
+    await Promise.all(names.map(n => caches.delete(n)))
+  }
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(regs.map(r => r.unregister()))
+  }
+  window.location.href = window.location.href  // hard refresh, bypass SW precache
+}
+```
+
+Wrap the version footer (lines 128-130) in a `<button>` styled to look like plain text, `onClick={clearCache}`. Add a tooltip/title explaining it clears cache and reloads.
+
+**2. `src/screens/SettingsScreen.jsx`** — show "current" vs "latest" status:
+
+The version fetched at line 17 is what the **server is currently serving**. To detect staleness, compare it against the version the client was built with. The cleanest approach without a build-time define: keep `main.jsx`'s `marina_app_version` localStorage key as the "last seen" version, and display a badge when they differ. But simpler and more honest: after `clearCache()` completes, the reload will re-run `main.jsx:checkVersion()` which already auto-syncs `marina_app_version` to the served version. So the footer just needs to show the served version + a "Clear cache & reload" affordance; the auto-update-on-bump logic in `main.jsx` already handles "is it latest" implicitly.
+
+**3. `src/main.jsx`** — no change needed; `checkVersion()` already does the server-driven hard refresh on version bump. Just make sure it still runs (it does, lines 34-37).
+
+**4. Rebuild + deploy** — `npm run build` then deploy `dist/` so the served JS includes both the `0` fix and the new Settings control.
+
+## Files changed (in edit order)
+
+1. `src/screens/SettingsScreen.jsx` — add `clearCache` handler + clickable version footer
+2. (rebuild) `dist/` — regenerated by `npm run build`
+
+Want me to proceed with the SettingsScreen.jsx edit?
+## 16/09/2026, 23:06:31
+
+
+
+
+
+
+## 16/09/2026, 23:06:50
+
+
+
+Let me check how the server serves the frontend — this determines whether `dist/` is even used.
+
+## 16/09/2026, 23:06:56
+
+
+
+
+
+## 16/09/2026, 23:07:03
+
+
+
+
+
+
+## 16/09/2026, 23:07:43
+
+
+
+
+
+## 16/09/2026, 23:07:56
+
+
+
+
+
+## 16/09/2026, 23:08:12
+
+
+
+
