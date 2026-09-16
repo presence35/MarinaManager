@@ -336,3 +336,15 @@ dbl tap doesn't work.    why so diffiuclt to make p&z work natively on chrome pw
 ## 16/09/2026, 23:21:51
 
 native for now.  go
+## 16/09/2026, 23:27:44
+
+p&z not nworking!
+## 16/09/2026, 23:31:24
+
+the rogue 0 still exists.
+## 16/09/2026, 23:33:41
+
+yes, it's v1.1.1.  godaddy auto pulla nd builds from git pushes. it's utd
+## 16/09/2026, 23:36:16
+
+i manually press build after i build and push

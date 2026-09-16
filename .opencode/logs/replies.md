@@ -4359,3 +4359,378 @@ Let me do a final clean build to verify everything is consistent end-to-end.
 Build is clean and reproducible. Let me verify the final state of the key files.
 
 
+
+## 16/09/2026, 23:25:04
+
+
+
+Done. Here's what was wrong and what I fixed.
+
+## Why the version never bumped
+
+`server.js:864` served `/api/version` by reading `package.json`, which never changes between builds — so the served version was always `1.1.9`, and `main.jsx`'s version-mismatch cache-clear never fired.
+
+## Changes
+
+1. **`scripts/gen-version.js`** (new) — writes `build-version.json` on every build with a unique version: `1.1.9+20260916202445-b054b18` (timestamp + git hash). Each build is now distinguishable.
+
+2. **`package.json`** — added `"prebuild": "node scripts/gen-version.js"` so it runs automatically on `npm run build`.
+
+3. **`server.js:864-876`** — `/api/version` now reads `build-version.json` live at request time (falls back to `package.json`), so it always reflects the currently deployed build.
+
+4. **`src/screens/SettingsScreen.jsx`** — the version footer at the bottom is now a clickable button that clears all `marina_*` localStorage, deletes every `caches` entry, unregisters the service worker, and hard-reloads (`window.location.href = window.location.href`). This is the same cache-clear sequence `main.jsx` uses for auto-updates.
+
+5. **`src/screens/CardDetailScreen.jsx:1868`** — the `0` fix: `{card.is_scanned && ...}` → `{!!card.is_scanned && ...}` (already applied).
+
+6. **`.gitignore`** — added `build-version.json`.
+
+## How it works now
+
+- **Auto-update:** On every load, `main.jsx` compares `marina_app_version` to `/api/version`. When you deploy a new build, the version changes → it wipes cache/SW/localStorage and hard-reloads automatically.
+- **Manual:** Tap the version footer in Settings → clears cache and reloads with the latest deployed build.
+
+## To apply
+
+Rebuild and deploy:
+```
+npm run build
+```
+Then restart the Node server (it reads `build-version.json` live). The build now emits a fresh version each time — verify with `cat build-version.json`.
+## 16/09/2026, 23:27:58
+
+
+
+I'm in plan mode now — read-only investigation only. Let me dig into why pinch-to-zoom still isn't working, checking the CSS and other potential blockers.
+
+## 16/09/2026, 23:28:05
+
+
+
+
+
+## 16/09/2026, 23:28:11
+
+
+
+
+
+## 16/09/2026, 23:28:27
+
+
+
+
+
+## 16/09/2026, 23:28:39
+
+
+
+
+
+## 16/09/2026, 23:28:53
+
+
+
+
+
+## 16/09/2026, 23:29:20
+
+
+
+
+
+## 16/09/2026, 23:29:29
+
+
+
+
+
+## 16/09/2026, 23:29:35
+
+
+
+
+
+## 16/09/2026, 23:29:39
+
+
+
+
+
+## 16/09/2026, 23:29:46
+
+
+
+
+
+## 16/09/2026, 23:31:13
+
+
+
+
+
+## 16/09/2026, 23:31:36
+
+
+
+Source is clean — no `touch-action`, no `user-select`, viewport is `user-scalable=yes`, icons valid, no JS overriding zoom. So the failure is almost certainly at the **deployed** layer. Let me check the version/SW cache mechanism, since the SW precaches `index.html` and could serve a stale `user-scalable=no`.
+
+
+## 16/09/2026, 23:31:42
+
+
+
+
+
+## 16/09/2026, 23:31:47
+
+
+
+
+
+## 16/09/2026, 23:31:54
+
+
+
+
+
+## 16/09/2026, 23:32:10
+
+
+
+
+
+## 16/09/2026, 23:32:15
+
+
+
+
+
+## 16/09/2026, 23:32:37
+
+
+
+I'm in plan mode — read-only investigation only. Let me re-examine thoroughly, since the `0` persists despite the `is_scanned` fix. I need to find ALL possible sources of a stray `0`, not just the one I fixed.
+
+Let me search the card detail screen and the whole codebase for every pattern that could render a literal `0` text node.
+
+
+## 16/09/2026, 23:32:45
+
+
+
+I'm in plan mode — read-only. I've verified the source is now correct. Here's the diagnosis.
+
+## Source is clean (verified)
+
+- `index.html` + `dist/index.html`: viewport is `user-scalable=yes` (no `no`, no `maximum-scale`, no `minimum-scale`)
+- No `touch-action` / `user-select` anywhere in HTML or the built JS
+- Fullscreen img: `width:100%; height:auto; display:block`, container `overflow:auto` + `WebkitOverflowScrolling: touch`
+- Icons are valid PNGs (192/512/favicon all have correct PNG signatures)
+
+So native pinch-zoom **will** work once the new build is live. The blocker is deployment + PWA caching.
+
+## Why it's still not working
+
+The production server serves its own copy of `dist/` (`server.js:177` → `path.join(__dirname, 'dist')`). Critically:
+
+- **`dist/` is gitignored** (`git ls-files dist` → empty), and **`build-version.json` is gitignored too
+- So my local `npm run build` regenerated `dist/` + `build-version.json` **only locally** — nothing got to the production server
+- The deployed server is still serving the old `dist/index.html` with `user-scalable=no`
+
+The app has a version-based cache-clear mechanism (`main.jsx:4` `checkVersion()` → compares `localStorage.marina_app_version` against `/api/version`, which reads `build-version.json` from disk). But it only triggers when the **server's** version changes — and that requires deploying the new `build-version.json`.
+
+## The plan (no edits yet — confirming before I execute)
+
+**1. Deploy the new build to production**
+Copy from `D:\Desktop\marine\` to the production server's app dir:
+```
+dist/index.html
+dist/manifest.json
+dist/manifest.webmanifest
+dist/registerSW.js
+dist/sw.js
+dist/assets/*
+dist/favicon.png, icon-192.png, icon-512.png
+build-version.json      ← required, or /api/version won't report the new build
+```
+Then restart the Node process.
+
+**2. Force the PWA to pick it up** (in order):
+- Open the app in Chrome → **Settings → "MARINA MANAGER v… CAMPBELL'S LANDING"** (the `clearCache()` button clears caches, unregisters the SW, reloads). This is the in-app path.
+- If that's not enough: Chrome → `chrome://settings/siteDetails` for the site → **Clear storage**; then uninstall + reinstall the PWA from the address bar.
+
+**3. Verify**
+- In Chrome DevTools (device mode → network conditions → offline off): open the photo, pinch — should zoom.
+- Console: `navigator.serviceWorker.getRegistration()` should show the new SW.
+- Settings footer should show the new version string from `build-version.json`.
+
+---
+
+Before I execute: **do you have access to copy files to the production server** (FTP/SFTP, or is it the GoDaddy file manager)? And is the deployed `build-version.json` currently present on the server, or was it never deployed? That determines whether step 1 alone suffices or if I need to also ensure `build-version.json` gets deployed.
+## 16/09/2026, 23:33:19
+
+
+
+
+
+## 16/09/2026, 23:34:09
+
+
+
+I'm in plan mode — read-only investigation only. Let me re-examine thoroughly, since the `0` persists despite the `is_scanned` fix. I need to find ALL possible sources of a stray `0`, not just the one I fixed.
+
+Let me search the card detail screen and the whole codebase for every pattern that could render a literal `0` text node.
+
+
+## 16/09/2026, 23:34:16
+
+
+
+
+
+## 16/09/2026, 23:34:24
+
+
+
+
+
+## 16/09/2026, 23:34:30
+
+
+
+
+
+## 16/09/2026, 23:34:36
+
+
+
+
+
+## 16/09/2026, 23:34:49
+
+
+
+The working tree matches HEAD — so my source changes are already committed. Let me verify what's actually in the committed tree vs. what's deployed.
+
+## 16/09/2026, 23:34:55
+
+
+
+
+
+## 16/09/2026, 23:35:08
+
+
+
+Found the real blocker. Your source is committed and correct, but **GoDaddy is not serving the latest build**:
+
+- Local `package.json`: **1.1.10** (committed, `git status` clean)
+- Deployed version (from Settings footer): **1.1.1**
+
+So GoDaddy is serving a stale snapshot — the auto-pull/build isn't actually running, or the deploy hasn't triggered since the viewport fix. The deployed `dist/index.html` still has `user-scalable=no`, which is why native pinch-zoom does nothing.
+
+## Plan (read-only — confirming before I execute)
+
+**1. Push the source so the build pipeline has the latest code**
+```
+git add -A
+git commit -m "fix: enable native pinch-zoom (user-scalable=yes), GPS photo upload"
+git push origin main
+```
+This pushes `index.html` (viewport fix), `src/screens/CardDetailScreen.jsx` (GPS + zoom), `server.js`, `package.json` 1.1.10, `scripts/gen-version.js`.
+
+**2. Trigger the GoDaddy build + deploy**
+- In the GoDaddy panel, find the Node.js app and **restart/rebuild** it (the auto-build may need a manual trigger, or it may run on push — verify it actually rebuilt by checking the Settings version footer after deploy).
+- If there's a "Build & Deploy" / "Git Pull" button, run it.
+
+**3. Force the PWA to pick up the new bundle**
+- Open the app → Settings → tap the **"MARINA MANAGER v… CAMPBELL'S LANDING"** footer (the `clearCache()` handler clears caches, unregisters the SW, reloads).
+- If still stale: Chrome → site details → **Clear storage**, then uninstall + reinstall the PWA.
+
+**4. Verify**
+- Settings footer shows the new version (1.1.10 or the build stamp from `build-version.json`)
+- Open a photo, pinch — should zoom natively
+
+---
+
+One thing I need from you before I execute: **is there a GoDaddy "Build & Deploy" / "Git Pull" button you should run after pushing, or does it truly auto-build on every push?** The version mismatch (1.1.1 deployed vs 1.1.10 in the repo) suggests the auto-build isn't running — if it were, the deployed version would already be 1.1.10.
+## 16/09/2026, 23:35:31
+
+
+
+I'm in plan mode — read-only investigation only. Let me re-examine thoroughly, since the `0` persists despite the `is_scanned` fix. I need to find ALL possible sources of a stray `0`, not just the one I fixed.
+
+Let me search the card detail screen and the whole codebase for every pattern that could render a literal `0` text node.
+
+## 16/09/2026, 23:36:04
+
+
+
+
+
+## 16/09/2026, 23:36:16
+
+
+
+
+
+## 16/09/2026, 23:36:29
+
+
+
+
+
+## 16/09/2026, 23:36:38
+
+
+
+I'm in plan mode — read-only. Let me verify the fix is actually in the deployed build and search for any OTHER source of a stray `0` in the card-detail area.
+
+First, let me confirm the fix is in the built bundle, and check what version is currently deployed vs what's in dist.
+
+## 16/09/2026, 23:36:40
+
+
+
+Source is already committed and correct — verified:
+- `index.html`: `user-scalable=yes` (committed)
+- `CardDetailScreen.jsx`: no custom zoom JS, no `touchAction: manipulate` (committed)
+- `package.json`: 1.1.10 (committed)
+
+So the repo is right; GoDaddy just hasn't rebuilt since the viewport fix (deployed = 1.1.1).
+
+## Plan
+
+**1. Push** (working tree is clean, so this should already be done — confirm `git push` shows "up to date with origin/main").
+
+**2. Manually press Build on GoDaddy** — this regenerates `dist/` from the committed source, so the deployed `index.html` gets `user-scalable=yes`.
+
+**3. Force the PWA to pick up the new bundle** (in order):
+- Open the app → Settings → tap the **"MARINA MANAGER v… CAMPBELL'S LANDING"** footer — the `clearCache()` handler clears caches, unregisters the SW, and reloads.
+- If still stale: Chrome → site details → **Clear storage**, then uninstall + reinstall the PWA.
+
+**4. Verify** — Settings footer should show the new version; open a photo and pinch to zoom.
+
+---
+
+One thing to confirm before I execute: **is the deployed app served at the domain root, or at a subpath?** The manifest is referenced as `/manifest.json` (absolute root). If it's at a subpath, Chrome won't offer install and the SW scope may not cover the page — which would also explain the alt-tab "Firefox" symptom. If it's subpath-mounted, I'd want to fix the manifest/icon paths to be relative (`./manifest.json`) before rebuilding, so the PWA works correctly once deployed.
+## 16/09/2026, 23:36:45
+
+
+
+
+
+## 16/09/2026, 23:37:07
+
+
+
+The fix is in the built bundle (`!!a.is_scanned`). But the `0` persists — let me check for OTHER bare numeric conditions in the built bundle that could render a stray `0`, and check whether the deployed build is actually this one.
+
+
+## 16/09/2026, 23:37:26
+
+
+
+The fix is in the bundle, but I found more instances of the same bug pattern. Let me check the exact `!!a.is_scanned` form and look for other bare numeric conditions that could render `0`.
+
+
