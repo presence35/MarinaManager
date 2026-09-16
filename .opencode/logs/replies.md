@@ -1632,3 +1632,426 @@ Not yet — still need to finish the server.js UPDATE statement. Let me complete
 
 Now let me verify syntax and check the protectedKeys list is consistent:
 
+
+## 16/09/2026, 22:31:34
+
+
+
+Based on the DevTools screenshot, the `0` is a **text node** in the DOM — literal text content `"0"` that got rendered into the page. You can see it in the Elements panel as a standalone text node after the closing `</div>` tag, and it shows up visually on the left side of the rendered page near the input box.
+
+**Common causes for a stray `0` like this:**
+
+1. **A component rendering a number** — e.g., `{count}`, `{index}`, or `{notifications}` where the value is `0`. In JSX, `{0}` renders as the text "0".
+2. **An accidental return value** — a component or map callback returning `0` instead of `null` or a proper element.
+3. **A debug/stub value** — leftover placeholder like `{0}` meant to be replaced.
+4. **CSS `content` property** — less likely here since it's in the DOM tree, not a `::before`/`::after`.
+
+**To track it down:**
+- Search your source for `{0}` or expressions that could evaluate to `0` near this component (the breadcrumb shows `div#root > div.app-shell > div.screen-body > div`).
+- Check any `.map()` calls or state variables being rendered directly.
+- If it's a React app, check for components returning numeric values where they should return `null`.
+
+Want me to look at the actual source code to find where it's coming from?
+## 16/09/2026, 22:33:28
+
+
+
+The stray `0` is a text node that's not in the HTML you pasted — it's being injected separately by the component logic. Let me search the source to find exactly where it's coming from.
+
+
+
+## 16/09/2026, 22:33:34
+
+
+
+
+
+
+## 16/09/2026, 22:33:39
+
+
+
+The Print Service Card button is in `CardDetailScreen.jsx`. Let me read the relevant section to find where the `0` is rendered.
+
+## 16/09/2026, 22:33:44
+
+
+
+
+
+## 16/09/2026, 22:33:50
+
+
+
+
+
+## 16/09/2026, 22:33:55
+
+
+
+
+
+## 16/09/2026, 22:34:36
+
+
+
+I'll investigate the photo upload flow to find the issue.
+
+## 16/09/2026, 22:34:50
+
+
+
+
+
+## 16/09/2026, 22:35:02
+
+
+
+
+
+## 16/09/2026, 22:35:07
+
+
+
+
+
+## 16/09/2026, 22:35:20
+
+
+
+
+
+## 16/09/2026, 22:35:37
+
+
+
+Let me check the server-side photo upload endpoint and the multer config.
+
+
+## 16/09/2026, 22:35:47
+
+
+
+
+
+## 16/09/2026, 22:36:05
+
+
+
+Let me check the service worker and server endpoint since "no network activity" suggests the request isn't even reaching the server.
+
+
+## 16/09/2026, 22:36:35
+
+
+
+Let me check the server-side photo endpoint and multer config.
+
+## 16/09/2026, 22:36:45
+
+
+
+
+
+## 16/09/2026, 22:36:53
+
+
+
+
+
+## 16/09/2026, 22:37:23
+
+
+
+Let me check whether there's a stale built version that might be out of sync with `src/`.
+
+
+
+## 16/09/2026, 22:37:29
+
+
+
+
+
+## 16/09/2026, 22:37:34
+
+
+
+
+
+## 16/09/2026, 22:37:41
+
+
+
+
+
+## 16/09/2026, 22:37:56
+
+
+
+
+
+## 16/09/2026, 22:38:14
+
+
+
+
+
+## 16/09/2026, 22:38:29
+
+
+
+
+
+## 16/09/2026, 22:39:04
+
+
+
+Let me continue reading the InfoTab component where the stray `0` likely originates.
+
+## 16/09/2026, 22:39:04
+
+
+
+
+
+## 16/09/2026, 22:39:25
+
+
+
+
+
+## 16/09/2026, 22:39:40
+
+
+
+
+
+## 16/09/2026, 22:39:57
+
+
+
+
+
+## 16/09/2026, 22:40:11
+
+
+
+
+
+## 16/09/2026, 22:40:24
+
+
+
+
+
+## 16/09/2026, 22:40:45
+
+
+
+Let me check what's actually deployed in the stale `dist/` bundle for the PhotosTab upload flow.
+
+
+
+## 16/09/2026, 22:41:00
+
+
+
+
+
+## 16/09/2026, 22:41:14
+
+
+
+
+
+## 16/09/2026, 22:41:29
+
+
+
+
+
+## 16/09/2026, 22:42:00
+
+
+
+Let me check whether the deployed `dist/` build is stale relative to the source fixes — this is a common cause of "no network activity" (the JS throws before reaching `fetch()`).
+
+
+## 16/09/2026, 22:42:23
+
+
+
+
+
+## 16/09/2026, 22:42:36
+
+
+
+
+
+## 16/09/2026, 22:42:51
+
+
+
+
+
+## 16/09/2026, 22:43:17
+
+
+
+Let me check the server's static file serving and route setup more carefully, since "no network activity" is a specific symptom.
+
+## 16/09/2026, 22:43:59
+
+
+
+I'll explore the workspace to understand your project setup, then I can give you specific advice.
+
+
+## 16/09/2026, 22:44:02
+
+
+
+
+
+
+## 16/09/2026, 22:44:02
+
+
+
+I've found the key files. Let me check the error-handling chain since the server has `[PHOTO UPLOAD ERROR]` logging but you see no console error.
+
+
+## 16/09/2026, 22:44:16
+
+
+
+
+
+
+## 16/09/2026, 22:44:16
+
+
+
+
+
+## 16/09/2026, 22:44:30
+
+
+
+
+
+
+## 16/09/2026, 22:44:30
+
+
+
+
+
+## 16/09/2026, 22:44:45
+
+
+
+
+
+
+## 16/09/2026, 22:44:52
+
+
+
+I found the likely culprit. Let me confirm by checking what's actually tracked vs. gitignored.
+
+
+## 16/09/2026, 22:44:56
+
+
+
+
+
+
+## 16/09/2026, 22:45:04
+
+
+
+## Objective
+- Fix multiple bugs in the Marina Manager app: (1) SQL datetime format error, (2) shrink-wrap completion won't save, (3) pickup/delivery can't be unchecked, (4) photo upload fails silently with no network activity.
+
+## Important Details
+- App serves frontend from `dist/` (server.js:177-182), not `src/`. `dist/` build mtime (1789587474556) is NEWER than `src/screens/CardDetailScreen.jsx` (1789422340347), so deployed bundle is fresh and matches current source.
+- Production uses MySQL (error format "Incorrect datetime value"); local dev uses SQLite. Schema `db/schema.sql` uses `CREATE TABLE IF NOT EXISTS` (won't modify existing tables).
+- `unwrap_done` field did not exist anywhere (not in schema, server destructuring, UPDATE, or protectedKeys).
+- `pickup_delivery` used `COALESCE(?, pickup_delivery)` which prevented clearing the field.
+- Photo upload endpoint: `POST /api/cards/:id/photos` with `upload.single('photo')` (multer). Server logs `[PHOTO UPLOAD ERROR]` on failure.
+- Service worker `src/sw.js` intercepts `/api/` and `/photos/` fetch events, forwarding via `fetch(e.request).catch(...)`.
+- `captureGPS()` (CardDetailScreen.jsx:18) uses `navigator.geolocation.getCurrentPosition` with `enableHighAccuracy: true, timeout: 10000, maximumAge: 0`.
+
+## Work State
+### Completed
+- **Datetime fix (server.js:575-581):** Added `toMysqlDateTime()` helper converting ISO 8601 (`2026-09-16T19:16:34.887Z`) → MySQL `YYYY-MM-DD HH:MM:SS`. Applied to `completed_at` in `PUT /api/cards/:id/work` (line 590) and checklist endpoints (lines 804, 807). Verified syntax with `node -c server.js`.
+- **Shrink wrap fix:** Added `unwrap_done INTEGER DEFAULT 0` to `db/schema.sql:55`; added `ALTER TABLE` migration at server.js:76-83; added `unwrap_done` to destructured body (line 529), UPDATE statement (line 562), `.run()` params (line 569), and `protectedKeys` (line 532).
+- **Pickup/delivery fix:** Changed `pickup_delivery = COALESCE(?, pickup_delivery)` → `pickup_delivery = ?` (server.js:566) so `null` clears the field. Also changed card SELECT to fetch `pickup_delivery, unwrap_done` for COALESCE safety.
+- Verified all server.js edits pass `node -c server.js`.
+
+### Active
+- **Photo upload issue:** User reports "Upload failed" toast when selecting a photo, with no console error and no network activity. Investigation in progress. Confirmed `dist/` build is fresh and contains the current PhotosTab upload code (matches `src/screens/CardDetailScreen.jsx:1338-1357`). Flow: `handleUpload()` → `captureGPS()` → `fileRef.current?.click()` → onChange → `upload(file)` → `fetch('/api/cards/:id/photos', {method:'POST', body: fd})`.
+
+### Blocked
+- Root cause of photo upload failure not yet identified. Leading hypotheses: (a) service worker intercepting the POST/FormData request and failing silently, (b) auth token issue, (c) `captureGPS()` hanging before file picker opens, (d) some runtime/environmental issue. Need user clarification on: which photo button (PhotosTab "Add X Photo", location photo, service work photo, or checklist photo), browser/device, whether PWA-installed, and whether DevTools Network tab truly shows zero requests.
+
+## Next Move
+1. Ask user to clarify: which photo upload button fails, browser/device, PWA vs browser, and confirm Network tab shows zero requests (including failed ones).
+2. Check `asyncHandler` and Express error handler in server.js to see if errors are swallowed before reaching `[PHOTO UPLOAD ERROR]` console.log.
+3. Test hypothesis that service worker `fetch(e.request)` with a FormData POST body fails silently (Request body consumed / CORS / respondWith issue).
+
+## Relevant Files
+- `D:\Desktop\marine\server.js` — API routes, photo upload endpoint (line 783), card PUT (line 523), migrations, auth. All datetime/unwrap/pickup fixes applied here.
+- `D:\Desktop\marine\db\schema.sql` — `service_cards` schema; `unwrap_done` column added at line 55.
+- `D:\Desktop\marine\src/screens/CardDetailScreen.jsx` — PhotosTab upload (1338-1357), `handleUpload` (1359-1364), `captureGPS` (18-35), `toggleUnwrap` (812-819), `setPickupDelivery` (1033-1039).
+- `D:\Desktop\marine\src/sw.js` — Service worker intercepting `/api/` and `/photos/` (suspected in photo upload failure).
+- `D:\Desktop\marine\dist/assets/index-Ck_EduZq.js` — Deployed bundle (verified fresh, contains current PhotosTab code).
+- `D:\Desktop\marine\src/api.js` — `getToken()` returns `localStorage.getItem('marina_token') || ''`.
+## 16/09/2026, 22:45:08
+
+
+
+Let me continue investigating the photo upload issue. I'll examine the photo upload endpoint and the service worker in parallel.
+
+## 16/09/2026, 22:45:09
+
+
+
+Found it. You're missing the **build step**.
+
+Your frontend is a Vite/React app that compiles `src/` → `dist/`, and the Express server serves the page from `dist/` (`server.js:177-181`). But `dist/` is in `.gitignore` (line 4), so **pushing to git never sends the built files** — only source. GoDaddy then runs the app against a stale or missing `dist/`.
+
+The missing step: after pushing, run the build on the server.
+
+**Fix (pick one):**
+
+1. **Build on the server after deploy** — SSH into GoDaddy and run:
+   ```bash
+   npm install
+   npm run build
+   ```
+   Then restart the Node app. (`express.static` reads from disk live, so the new `dist/` is picked up on the next request; a browser hard-reload may still be needed to bust the service worker.)
+
+2. **Or have GoDaddy build automatically** — add a `postinstall` script to `package.json` so `npm install` runs the build:
+   ```json
+   "postinstall": "npm run build"
+   ```
+
+3. **Or stop ignoring `dist/`** — remove `dist/` from `.gitignore`, build locally, and commit the built output so it's deployed as-is (larger repo, but no build step on the server).
+
+Option 2 is usually the least error-prone for GoDaddy's Node hosting. Also make sure the Node process actually **restarts** after the build — many hosts only restart on file changes or on a manual restart, otherwise the old `dist/` keeps serving.
+## 16/09/2026, 22:45:11
+
+
+
+
+
+## 16/09/2026, 22:45:17
+
+
+
+

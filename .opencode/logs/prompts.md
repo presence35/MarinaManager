@@ -209,3 +209,30 @@ done?
 ## 16/09/2026, 22:29:39
 
 what's w the random 0 that shows up here all the time.
+## 16/09/2026, 22:31:16
+
+what's w the random 0 that shows up here all the time.
+## 16/09/2026, 22:33:12
+
+yes, i gave you the html to see where it is.
+
+it's below this:
+<div style="font-family: Bebas Neue; font-size: 26px; letter-spacing: 1.5px; color: rgb(255, 255, 255); line-height: 1;">Glastron</div><div style="color: rgba(255, 255, 255, 0.7); font-size: 13px; margin: 3px 0px 10px; font-family: Barlow Condensed; font-weight: 600; letter-spacing: 0.3px;">Reg Sheen · — · ON20159</div><div style="display: flex; flex-wrap: wrap; gap: 5px; padding-bottom: 2px;"><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgb(45, 168, 79); color: rgb(255, 255, 255); border: medium; opacity: 1;">✓ INTAKE</div><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgb(45, 168, 79); color: rgb(255, 255, 255); border: medium; opacity: 1;">✓ FALL CHECK</div><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgb(45, 168, 79); color: rgb(255, 255, 255); border: medium; opacity: 1;">✓ IN STORAGE</div><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgb(45, 168, 79); color: rgb(255, 255, 255); border: medium; opacity: 1;">✓ SPRING CHECK</div><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgb(45, 168, 79); color: rgb(255, 255, 255); border: medium; opacity: 1;">✓ SERVICE</div><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgb(214, 64, 69); color: rgb(255, 255, 255); border: medium; opacity: 1;">CLEANING</div><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.3); opacity: 0.7;">READY</div><div style="flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-family: Barlow Condensed; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.3); opacity: 0.7;">INVOICED</div></div>
+
+
+
+and it's literally above this:
+
+<button class="btn btn-outline" style="flex: 1 1 0%; min-width: 0px; opacity: 1;">← SERVICE</button><button class="btn btn-accent" style="flex: 1 1 0%; min-width: 0px; opacity: 1;">READY →</button><button class="btn btn-outline" style="width: auto; flex-shrink: 0;" title="Print Service Card"><span style="width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"></path><rect x="6" y="14" width="12" height="8" rx="1"></rect></svg></span> Print</button>
+## 16/09/2026, 22:34:28
+
+i get upload failed when selecting a photo.  no console error, or network activity.
+## 16/09/2026, 22:38:29
+
+continue
+## 16/09/2026, 22:43:54
+
+pushing to git and updating godaddy's node doesn't seem to refresh the page.  am i forgetting a step
+## 16/09/2026, 22:45:04
+
+Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.
