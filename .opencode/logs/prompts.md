@@ -236,3 +236,34 @@ pushing to git and updating godaddy's node doesn't seem to refresh the page.  am
 ## 16/09/2026, 22:45:04
 
 Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.
+## 16/09/2026, 22:46:04
+
+pretty sure godaddy builds it already.  i don't send my dist to them.  they pull from my git and build.
+## 16/09/2026, 22:48:02
+
+Git commitdcf56f9
+Deployed at
+
+16 minutes ago
+
+
+that's what's deployed.  i don't see that commit tho
+## 16/09/2026, 22:50:29
+
+godaddy says it compiled this: https://github.com/presence35/MarinaManager/commit/dcf56f94e4cca0403152cde1199ac57a040cc314
+
+i get 404 tho.  its' halluciatning?
+## 16/09/2026, 22:53:26
+
+continue
+## 16/09/2026, 22:55:42
+
+it works. it's the gps failing that crashes it.  can fix that i guess.
+
+we neeed a pinch and zoom on all photos
+
+
+
+## 16/09/2026, 22:57:07
+
+go

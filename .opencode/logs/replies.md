@@ -2055,3 +2055,582 @@ Option 2 is usually the least error-prone for GoDaddy's Node hosting. Also make 
 
 
 
+
+## 16/09/2026, 22:45:44
+
+
+
+
+
+## 16/09/2026, 22:45:59
+
+
+
+
+
+## 16/09/2026, 22:46:03
+
+
+
+
+
+## 16/09/2026, 22:46:08
+
+
+
+
+
+## 16/09/2026, 22:46:13
+
+
+
+
+
+## 16/09/2026, 22:46:18
+
+
+
+
+
+## 16/09/2026, 22:46:20
+
+
+
+
+
+
+
+## 16/09/2026, 22:46:27
+
+
+
+
+
+
+## 16/09/2026, 22:46:32
+
+
+
+
+
+
+## 16/09/2026, 22:46:41
+
+
+
+
+
+## 16/09/2026, 22:46:47
+
+
+
+
+
+## 16/09/2026, 22:46:52
+
+
+
+
+
+## 16/09/2026, 22:46:57
+
+
+
+
+
+
+## 16/09/2026, 22:47:17
+
+
+
+
+
+## 16/09/2026, 22:47:23
+
+
+
+
+
+
+
+## 16/09/2026, 22:47:25
+
+
+
+
+
+## 16/09/2026, 22:47:28
+
+
+
+
+
+
+## 16/09/2026, 22:47:33
+
+
+
+
+
+
+## 16/09/2026, 22:47:51
+
+
+
+Let me check for other photo upload paths and how the SW is registered in the deployed build.
+
+## 16/09/2026, 22:47:55
+
+
+
+
+
+## 16/09/2026, 22:48:10
+
+
+
+
+
+
+
+## 16/09/2026, 22:48:13
+
+
+
+
+
+## 16/09/2026, 22:48:18
+
+
+
+
+
+
+## 16/09/2026, 22:48:22
+
+
+
+
+
+## 16/09/2026, 22:48:27
+
+
+
+
+
+
+## 16/09/2026, 22:48:36
+
+
+
+
+
+
+## 16/09/2026, 22:48:40
+
+
+
+
+
+## 16/09/2026, 22:48:49
+
+
+
+
+
+## 16/09/2026, 22:49:07
+
+
+
+
+
+
+## 16/09/2026, 22:49:07
+
+
+
+Let me check the deployed service worker registration and look at the other photo upload paths to compare.
+
+## 16/09/2026, 22:49:12
+
+
+
+
+
+## 16/09/2026, 22:49:51
+
+
+
+Let me check the other FormData upload path and how the SW registration behaves in the deployed build.
+
+## 16/09/2026, 22:49:58
+
+
+
+I checked the repo, and there's an important discrepancy:
+
+**`dcf56f9` does not exist anywhere in your git repo** — not locally, not on GitHub (`git fsck` shows no such object, and `origin/main` is at `cef7960`). Your latest commit is `cef7960 "fix"` (Sep 16, 22:45). So GoDaddy's panel is either showing stale data, a build/artifact ID rather than a git commit, or it's pulling from a different source than this repo.
+
+That matters because if GoDaddy isn't actually deploying your latest code, that alone would explain why the page never refreshes.
+
+To pin this down, two quick questions:
+
+1. **Where exactly are you seeing `dcf56f9`?** (GoDaddy's Node.js deploy panel? The "Deployments" log? A file-manager path?)
+2. **How are you opening the app** — installed PWA on a phone home screen, or in a mobile browser?
+
+The second question matters because the likely real culprit is the **service worker / PWA cache** (the app precaches assets via Workbox, and `checkVersion()` in `src/main.jsx` only clears it when `package.json`'s version changes). If the version isn't bumped per deploy, or the app is installed as a WebAPK, the browser keeps serving stale files even after a successful deploy.
+## 16/09/2026, 22:50:28
+
+
+
+I have enough context now. Let me do a couple more targeted read-only checks before deciding whether to proceed or ask for clarification.
+
+## 16/09/2026, 22:50:32
+
+
+
+
+
+## 16/09/2026, 22:50:37
+
+
+
+
+
+
+
+## 16/09/2026, 22:50:42
+
+
+
+
+
+## 16/09/2026, 22:51:01
+
+
+
+Verified: **that commit doesn't exist anywhere.**
+
+- GitHub returns **404** for `dcf56f94e4cca0403152cde1199ac57a040cc314`
+- Your local repo has **no such object** (`git fsck` shows nothing, `git cat-file` fails)
+- Your actual latest commit is **`cef7960` "fix"** (Sep 16, 22:45), which *is* on GitHub's `main`
+
+So GoDaddy is showing its own internal **build/compile ID**, not a git SHA — it's not verifiable against GitHub, and not necessarily "hallucinating," but it can't tell you what code is actually live.
+
+**The real test is what's serving on your domain.** Two things to check:
+
+1. **`/api/version`** — your `server.js:864` returns the `package.json` version. Compare it to what's deployed locally (currently `1.1.9`). If it matches, the server has your latest source.
+2. **The built JS** — open DevTools → Network, load the page, and check the hashed bundle filename (e.g. `assets/index-XXXX.js`). Compare to your local `dist/assets/index-Ck_EduZq.js`. If the hash differs on the server, GoDaddy built a different/newer tree than your local `dist/`.
+
+The "page won't refresh" symptom is almost certainly the **service worker** (`src/sw.js` precaches assets; `src/main.jsx:4` `checkVersion()` only busts cache when `package.json` version changes). If the version didn't change between pushes, the browser keeps serving stale files even after a successful deploy.
+
+**Plan (no changes yet — tell me which to run):**
+
+1. Confirm what's actually live: curl your domain's `/api/version` and compare the JS bundle hash to local `dist/`.
+2. If the server is stale → verify you pushed `cef7960` and force a redeploy.
+3. If the server is fresh but the browser shows old UI → fix the cache-busting gap so future deploys auto-refresh:
+   - Bump `version` in `package.json` on every deploy (triggers `checkVersion()`), and/or
+   - Add a version query param to the SW registration so a new SW script is always fetched.
+
+Want me to proceed with step 1 (checking the live site), and if so, what's your domain URL?
+## 16/09/2026, 22:51:11
+
+
+
+I've traced the full photo-upload path. Static analysis narrows it to a few hypotheses, but the "zero network requests" symptom can't be pinned down without your environment details. A few targeted questions:
+
+1. **Which photo button fails?** Photos tab "Add X Photo", the location photo (service work), or the checklist photo? (They all use the same endpoint, but different code paths.)
+
+2. **PWA-installed or browser?** The service worker (`src/sw.js` → `dist/sw.js`) intercepts every `/api/` POST, including the FormData upload. If you installed the app and have a stale SW active, that's a prime suspect.
+
+3. **Network tab: did you check "Preserve log" and filter to "All" (not just "Doc")?** A FormData POST is easy to miss. Also — did you see the request at all, even a failed one, or truly nothing?
+
+4. **Browser/device + site URL scheme?** Is the site HTTPS or http? (Geolocation and the file picker behave differently on non-secure origins.) And does the file picker actually open when you click, or does the button seem to hang for ~10 seconds first (that's `captureGPS()` waiting on location)?
+
+5. **Server logs:** any `[PHOTO UPLOAD ERROR]`, `[ERROR]`, or 401/500 lines in the Node console at the moment you click?
+
+One thing I can already see as a likely contributing issue regardless: `handleUpload()` awaits `captureGPS()` (10s timeout, high-accuracy) **before** opening the file picker, so on devices without GPS the button hangs ~10s before the picker appears. Want me to also fix that flow?
+## 16/09/2026, 22:53:36
+
+
+
+I'm now in plan mode (read-only). Let me continue investigating to pinpoint the stray `0`.
+
+## 16/09/2026, 22:54:10
+
+
+
+I think I found it. Let me verify by checking how `is_scanned` is used elsewhere and confirm the data type.
+
+
+## 16/09/2026, 22:54:58
+
+
+
+
+
+
+
+## 16/09/2026, 22:55:10
+
+
+
+
+
+
+## 16/09/2026, 22:55:15
+
+
+
+I found it. Let me read the exact rendering in `CardsScreen.jsx` to confirm.
+
+## 16/09/2026, 22:55:46
+
+
+
+Found it. Let me verify by checking how `is_scanned` is stored/returned by the server.
+
+## 16/09/2026, 22:55:52
+
+
+
+
+
+## 16/09/2026, 22:55:57
+
+
+
+
+
+## 16/09/2026, 22:55:57
+
+
+
+
+
+## 16/09/2026, 22:56:03
+
+
+
+
+
+## 16/09/2026, 22:56:07
+
+
+
+
+
+## 16/09/2026, 22:56:11
+
+
+
+
+
+## 16/09/2026, 22:56:15
+
+
+
+
+
+## 16/09/2026, 22:56:20
+
+
+
+
+
+## 16/09/2026, 22:56:24
+
+
+
+
+
+## 16/09/2026, 22:56:29
+
+
+
+
+
+## 16/09/2026, 22:56:31
+
+
+
+I found it. Let me verify the exact rendering to confirm before presenting the plan.
+
+The stray `0` is the value of `card.is_scanned` (stored as an integer `0`/`1` in SQLite) being rendered by the JSX expression at `CardDetailScreen.jsx:1868`:
+
+```jsx
+{card.is_scanned && (employee?.role === 'admin' || employee?.role === 'office') && (
+  <div ...>OCR Scanned — Needs Verification</div>
+)}
+```
+
+This is the classic React gotcha: `{value && <JSX/>}` — when `value` is `0`, the expression evaluates to `0`, and React renders the number `0` as a text node. For every non-scanned card (`is_scanned = 0`), a literal `0` gets printed right below the status pills. When `is_scanned = 1`, it correctly renders the orange banner.
+
+Note the analogous code in `CardsScreen.jsx:131` already uses `{!!card.is_scanned && (...)}` (double-negation), which is why that one doesn't leak a `0` — the CardDetailScreen version was simply missed.
+
+## Plan
+
+One-line fix in `src\screens\CardDetailScreen.jsx`:
+
+**Line 1868** — wrap the condition in a boolean coercion so it never renders the raw number:
+
+```diff
+-      {card.is_scanned && (employee?.role === 'admin' || employee?.role === 'office') && (
++      {!!card.is_scanned && (employee?.role === 'admin' || employee?.role === 'office') && (
+```
+
+This makes `0` → `false` (renders nothing) and `1` → `true` (renders the banner), matching the safe pattern already used in `CardsScreen.jsx`.
+
+Want me to apply this fix?
+## 16/09/2026, 22:56:34
+
+
+
+
+
+## 16/09/2026, 22:56:39
+
+
+
+
+
+## 16/09/2026, 22:56:43
+
+
+
+
+
+## 16/09/2026, 22:56:48
+
+
+
+
+
+## 16/09/2026, 22:56:52
+
+
+
+
+
+## 16/09/2026, 22:56:56
+
+
+
+
+
+## 16/09/2026, 22:57:03
+
+
+
+
+
+## 16/09/2026, 22:57:07
+
+
+
+
+
+## 16/09/2026, 22:57:12
+
+
+
+
+
+## 16/09/2026, 22:57:12
+
+
+
+
+
+## 16/09/2026, 22:57:18
+
+
+
+
+
+## 16/09/2026, 22:57:19
+
+
+
+
+
+## 16/09/2026, 22:57:23
+
+
+
+
+
+## 16/09/2026, 22:57:28
+
+
+
+Fixed. Let me verify there's a build/lint step to confirm nothing broke.
+
+## 16/09/2026, 22:57:29
+
+
+
+
+
+## 16/09/2026, 22:57:32
+
+
+
+
+
+## 16/09/2026, 22:57:35
+
+
+
+
+
+## 16/09/2026, 22:57:41
+
+
+
+
+
+## 16/09/2026, 22:57:41
+
+
+
+The change is a one-line JSX boolean coercion. Let me run the build to confirm nothing breaks.
+
+## 16/09/2026, 22:57:46
+
+
+
+
+
+## 16/09/2026, 22:57:49
+
+
+
+
+
+## 16/09/2026, 22:57:53
+
+
+
+
+
+## 16/09/2026, 22:57:54
+
+
+
+Fixed. Build passes.
+
+**Root cause:** `CardDetailScreen.jsx:1868` used `{card.is_scanned && (...)}` — the classic React gotcha. `card.is_scanned` is a SQLite integer (`0`/`1`), so for every non-scanned card the expression evaluated to `0` and React rendered a literal `0` text node right below the status pills. When `is_scanned === 1`, it correctly showed the orange banner.
+
+**Fix:** `src\screens\CardDetailScreen.jsx:1868` — changed to `{!!card.is_scanned && (...)}` so `0` → `false` (renders nothing) and `1` → `true` (renders the banner). This matches the safe pattern already used in `CardsScreen.jsx:131`.
+## 16/09/2026, 22:57:58
+
+
+
+
+
+## 16/09/2026, 22:58:03
+
+
+
+

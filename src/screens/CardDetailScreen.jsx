@@ -1865,7 +1865,7 @@ export default function CardDetailScreen({ params = {} }) {
         </div>
       )}
 
-      {card.is_scanned && (employee?.role === 'admin' || employee?.role === 'office') && (
+      {!!card.is_scanned && (employee?.role === 'admin' || employee?.role === 'office') && (
         <div style={{ padding: '10px 16px', background: '#e07b39', color: '#fff', fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
           <span>{'\u26A0\uFE0F'} OCR Scanned — Needs Verification</span>
           <button
