@@ -227,7 +227,7 @@ function InfoTab({ card, reload, canEdit = true }) {
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'Bebas Neue', fontSize: 20, letterSpacing: 1, color: 'var(--text)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
                 {card.customer_name}
-                {card.is_fake && <span style={{ background: '#c0392b', color: '#fff', fontSize: 10, fontFamily: 'Barlow Condensed', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: 0.5 }}>FAKE DATA</span>}
+                {!!card.is_fake && <span style={{ background: '#c0392b', color: '#fff', fontSize: 10, fontFamily: 'Barlow Condensed', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: 0.5 }}>FAKE DATA</span>}
               </div>
               {card.address && <div style={{ fontSize: 13, color: 'var(--text2)' }}>{card.address}, {card.city} {card.postal_code}</div>}
               {card.customer_phone && (

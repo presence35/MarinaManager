@@ -348,3 +348,21 @@ yes, it's v1.1.1.  godaddy auto pulla nd builds from git pushes. it's utd
 ## 16/09/2026, 23:36:16
 
 i manually press build after i build and push
+## 16/09/2026, 23:39:57
+
+root
+## 16/09/2026, 23:41:46
+
+well that's weird!
+## 16/09/2026, 23:42:27
+
+continue
+## 16/09/2026, 23:45:47
+
+Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.
+## 16/09/2026, 23:47:23
+
+no, no mateter how many times i hard refresh
+## 16/09/2026, 23:47:35
+
+go
