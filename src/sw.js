@@ -7,7 +7,7 @@ clientsClaim()
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/photos/')) {
+  if (url.pathname.startsWith('/api/')) {
     e.respondWith(
       fetch(e.request).catch(() => new Response(JSON.stringify({ error: 'Offline' }), {
         headers: { 'Content-Type': 'application/json' }, status: 503

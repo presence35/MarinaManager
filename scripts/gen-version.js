@@ -63,4 +63,5 @@ const out = {
 }
 
 fs.writeFileSync(path.join(root, 'build-version.json'), JSON.stringify(out, null, 2) + '\n')
+
 console.log(`[gen-version] build version: ${fullVersion} (build ${stamp})`)

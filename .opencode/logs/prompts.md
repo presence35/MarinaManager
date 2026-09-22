@@ -366,3 +366,46 @@ no, no mateter how many times i hard refresh
 ## 16/09/2026, 23:47:35
 
 go
+## 22/09/2026, 17:01:09
+
+can't load photos randomly.  no errors in godaddy node logs.  i restarred node.
+## 22/09/2026, 17:01:57
+
+Failed to load ‘https://marinamanager.ca/photos/1790016433668-187842622.jpg’. A ServiceWorker intercepted the request and encountered an unexpected error.
+## 22/09/2026, 17:03:21
+
+add "Shrinkwrap" to the photo tag options, sort the list better, make "cleaning_complete" no _
+## 22/09/2026, 17:06:55
+
+alos "Service Work"
+
+Found another issue: if i try to create an existing customer, it doesn't recognize the customer already exists. Its possible two people have the same name, but we will need to prevent duplicates, maybe if a second customer has same name they require middle initial or something. But, now i have created two customers identical how to delete one? And how to delete the test boat?
+## 22/09/2026, 17:09:20
+
+go
+
+but they worked yesterday and nohting has changed since then
+## 22/09/2026, 17:10:11
+
+continue
+## 22/09/2026, 17:10:32
+
+continue
+## 22/09/2026, 17:10:40
+
+continue
+## 22/09/2026, 17:13:11
+
+1. names should be duplicationable.  email and phone should be the check.  James Smith won't want james smith 2, cos you'd still have to know how to identify them irl.
+
+
+
+## 22/09/2026, 17:13:23
+
+continue
+## 22/09/2026, 17:14:40
+
+go.  we need friction on deleting things w entires in them.  also an undo for a few days or something
+## 22/09/2026, 17:16:57
+
+continue

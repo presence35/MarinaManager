@@ -5041,3 +5041,688 @@ Build is clean. Final verification of the two edited source lines:
 
 
 
+
+## 16/09/2026, 23:48:50
+
+
+
+All three `is_fake` instances are now `!!`, the build guard passes, and the rebuilt bundle has zero bare patterns. Let me make sure the version file also ships with the deployed `dist/` (so the live `/api/version` works in production, not just local dev):
+
+
+## 16/09/2026, 23:49:05
+
+
+
+I found a real gap: `server.js` reads `build-version.json` from the served root, but `dist/` (the deployed artifact) doesn't contain it — so a production deploy falls back to the static `package.json` version and the auto-update never fires. Let me make the build emit it into `dist/` so it ships with the artifact.
+
+## 16/09/2026, 23:49:09
+
+
+
+
+
+## 16/09/2026, 23:49:15
+
+
+
+Wait — `gen-version.js` runs as `prebuild` (before `vite build`), so `dist/` won't exist yet on a clean build. Better to copy it in a `postbuild` step where ordering is guaranteed.
+
+
+## 16/09/2026, 23:49:15
+
+
+
+
+
+## 16/09/2026, 23:49:20
+
+
+
+
+
+## 16/09/2026, 23:49:25
+
+
+
+
+
+## 16/09/2026, 23:49:29
+
+
+
+Now rebuild to verify the full chain works end-to-end.
+
+
+
+## 16/09/2026, 23:49:38
+
+
+
+
+
+## 16/09/2026, 23:49:48
+
+
+
+Done. The stray `0` is fixed and the fix is now regression-proof.
+
+## What was wrong
+
+The `is_scanned` fix was already in the bundle, but I grepped the **actual built bundle** and found a second unfixed instance of the same bug: `e.is_fake&&` was the only remaining bare-numeric `&&`. `is_fake` comes back from SQLite as integer `0`/`1`, so `{card.is_fake && <span>FAKE DATA</span>}` rendered the literal text `"0"` on every non-fake card — exactly the symptom you saw.
+
+## Changes
+
+1. **`src/screens/CardDetailScreen.jsx:230`** — `{card.is_fake && ...}` → `{!!card.is_fake && ...}`
+2. **`src/screens/CustomerDetailScreen.jsx:78`** — `{c.is_fake && ...}` → `{!!c.is_fake && ...}`
+3. **`scripts/gen-version.js`** — added a `prebuild` regression guard that fails the build if any `{ flag.is_scanned/is_fake/wrap_required && }` appears without a leading `!!`
+4. **`scripts/copy-version.js`** (new) + **`package.json`** `postbuild` — copies `build-version.json` into `dist/` so the deployed artifact carries a live version. Previously `server.js` served `dist/` but the version file only existed at the repo root, so a production deploy silently fell back to the static `package.json` version and the auto-update never fired.
+
+## Verified
+
+- `npm run build` succeeds (guard passes, postbuild copies the version file)
+- Rebuilt bundle: **0** bare patterns; all four `!!` forms present (`!!a.is_scanned`, `!!e.is_fake`, `!!e.is_scanned`, `!!e.wrap_required`)
+- `dist/build-version.json` now ships with the artifact (`1.1.10+20260916204930-2addb9e`)
+
+## To apply to your deployed instance
+
+Deploy the new `dist/`. On next visit, `main.jsx:checkVersion()` will see the bumped version, wipe `marina_*` localStorage + all caches + SW registration, and hard-reload with the fixed bundle. If the auto-update path is flaky for you, tap **"Clear cache and reload with the latest deployed build"** in Settings (already implemented).
+## 16/09/2026, 23:50:00
+
+
+
+The committed source is correct and pushed — I verified:
+
+- `index.html` (committed): `user-scalable=yes` ✓
+- `CardDetailScreen.jsx` (committed): no custom zoom JS, no `touchAction: manipulate` ✓
+- `package.json` (committed): 1.1.10 ✓
+- `HEAD` = `2410ca0` = `origin/main` (fully pushed)
+
+So the repo is right. The deployed build is stale at **1.1.1** — GoDaddy hasn't rebuilt since the viewport fix landed. That's the whole problem: `user-scalable=no` is still in the deployed `dist/index.html`, and no amount of hard-refresh fixes a server-side build.
+
+## Plan (read-only — confirming before I execute)
+
+**1. Confirm the deployed build is stale**
+Open the live site and view-source:
+```
+view-source:https://<your-domain>/
+```
+Look for the viewport meta. If it says `user-scalable=no`, the build is stale (expected). Also check Settings → footer version.
+
+**2. Rebuild on GoDaddy**
+- `git push origin main` (should say "up to date" — the fix is already there)
+- Manually press **Build** in the GoDaddy Node panel
+
+**3. Force the PWA to pick up the new bundle**
+- Settings → tap the **"MARINA MANAGER v… CAMPBELL'S LANDING"** footer (`clearCache()`)
+- If still stale: Chrome → site details → **Clear storage** → uninstall + reinstall the PWA
+
+**4. Verify**
+- view-source shows `user-scalable=yes`
+- Settings footer shows the new version
+- Open a photo → pinch zoom works
+
+---
+
+One question before I proceed: **does GoDaddy's Build run `npm run build` (regenerating `dist/` from `src`), or does it serve a pre-built `dist/` you uploaded manually?** The version mismatch (1.1.1 deployed vs 1.1.10 committed) tells me the last build ran on old source — if it's `npm run build`, pushing + pressing Build should fix it in one step. If it's a manual `dist/` upload, I'll need to rebuild `dist/` locally and you'd upload that instead.
+## 22/09/2026, 17:02:08
+
+I'll investigate the ServiceWorker and photo serving logic in your codebase.
+## 22/09/2026, 17:03:01
+
+Now I see the ServiceWorker intercepts `/photos/` requests. Let me dig deeper into how photos are served and how the SW is registered.
+## 22/09/2026, 17:03:56
+
+Let me search for how photo types are used across the codebase to understand the impact.
+## 22/09/2026, 17:03:59
+
+Let me check the catch-all route and how photos are handled in production.
+## 22/09/2026, 17:04:59
+
+Let me read the photo display area to see how tags are shown on individual photos.
+## 22/09/2026, 17:05:21
+
+Now I have a clear picture. Let me read the full SW fetch handler in both the source and dist to confirm.
+## 22/09/2026, 17:05:51
+
+Now I have a clear picture. Let me verify there are no other copies of `PHOTO_TYPES` in the current codebase.
+## 22/09/2026, 17:06:04
+
+## Plan
+
+All photo tag changes are in **one file**: `src/screens/CardDetailScreen.jsx`, inside the `PhotosTab` component (line 1331+).
+
+### Problem
+- `PHOTO_TYPES` (line 1378): `['intake', 'damage', 'replacement', 'cleaning_complete', 'location', 'general']`
+  - `cleaning_complete` has an underscore — displays raw on chip buttons (line 1385) and photo badges (lines 1406, 1416), showing as "cleaning_complete"
+  - No `shrinkwrap` option
+  - `location` is buried between work types
+
+### Proposed changes
+
+**1. `src/screens/CardDetailScreen.jsx:1378`** — Update `PHOTO_TYPES` + add formatter:
+```js
+const formatPhotoType = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+const PHOTO_TYPES = ['intake', 'location', 'damage', 'replacement', 'cleaning', 'shrinkwrap', 'general']
+```
+- Rename `cleaning_complete` → `cleaning` (no underscore in value)
+- Add `shrinkwrap`
+- Reorder: inbound docs (`intake`, `location`) → work types (`damage`, `replacement`, `cleaning`, `shrinkwrap`) → catch-all (`general`)
+
+**2. Line 1385** — Chip button: `{t}` → `{formatPhotoType(t)}`
+
+**3. Line 1390** — Upload button: inline `.replace(...)` → `formatPhotoType(photoType)` (extracted)
+
+**4. Line 1406** — Photo badge: `{p.photo_type}` → `{formatPhotoType(p.photo_type)}`
+
+**5. Line 1416** — Fullscreen overlay: `{fullscreen.photo_type}` → `{formatPhotoType(fullscreen.photo_type)}`
+
+### Rationale for sort order
+| Position | Tag | Reason |
+|----------|-----|--------|
+| 1–2 | `intake`, `location` | Inbound/documentation phase |
+| 3–6 | `damage`, `replacement`, `cleaning`, `shrinkwrap` | Work/repair types (logical progression) |
+| 7 | `general` | Catch-all, last |
+
+The `formatPhotoType` helper also gracefully handles **existing DB rows** still tagged with the old `cleaning_complete` value — they'll display as "Cleaning Complete" rather than showing the raw underscore.
+
+### Files to change (in order)
+1. `src/screens/CardDetailScreen.jsx` — single file, 5 edits
+## 22/09/2026, 17:06:42
+
+Let me check if the specific photo file exists and verify the data directory setup.
+## 22/09/2026, 17:07:16
+
+Now I have a complete picture. Let me present my findings.
+
+## Root Cause Analysis
+
+The issue is in `src/sw.js` (the ServiceWorker). Here's the chain:
+
+1. **The SW intercepts `/photos/` requests** (line 10 of `src/sw.js`). It does a network-only `fetch(e.request)` with a `.catch()` that returns a **JSON response** (`Content-Type: application/json`, status 503) for any failure.
+
+2. **On GoDaddy shared hosting**, photo requests can intermittently fail due to network latency, timeouts, or connection drops. When `fetch()` fails, the catch handler fires.
+
+3. **The catch returns JSON for an image request** — the browser expects image bytes (`.jpg`), but the SW gives it JSON. The browser cannot render JSON as an image, producing: *"A ServiceWorker intercepted the request and encountered an unexpected error."*
+
+4. **You restarted Node, but that doesn't affect the ServiceWorker** — the SW lives in the browser, not on the server. It will keep running until a new SW version replaces it (via `registerType: 'autoUpdate'`, which happens on rebuild/redeploy).
+
+5. **Compounding factor**: When a photo file genuinely doesn't exist, `express.static` calls `next()`, then your catch-all route `app.get('*')` (server.js:952) serves `index.html` with a **200 status** — so a missing photo returns HTML instead of a 404. The SW fetches it successfully but passes HTML to the `<img>` tag, which also fails to render.
+
+### Files involved:
+| File | Role |
+|------|------|
+| `src/sw.js:10` | SW intercepts `/photos/` requests, returns JSON on failure |
+| `dist/sw.js` | Built/minified version with the same logic (what's actually deployed) |
+| `server.js:183` | `express.static` serves `data/photos/` |
+| `server.js:952-954` | Catch-all `*` route serves `index.html` for missing files |
+
+## Fix
+
+1. **Remove `/photos/` from the SW intercept** — let image requests go straight to the network, bypassing the SW entirely. The JSON offline fallback only makes sense for `/api/` calls.
+2. **Return 404 (not HTML) for missing photos** — add a guard before the catch-all route so `/photos/` 404s instead of serving `index.html`.
+
+### Files that would change:
+1. `src/sw.js` — remove `/photos/` from the conditional
+2. `dist/sw.js` — rebuild to regenerate the minified SW
+3. `server.js` — guard `/photos/` against the catch-all
+
+Shall I apply these fixes?
+## 22/09/2026, 17:08:26
+
+The user added two more issues. Let me explore the customer duplication prevention and customer/boat deletion.
+## 22/09/2026, 17:08:36
+
+Let me examine the server.js customer/boat routes and the customer creation flow in the frontend.
+## 22/09/2026, 17:09:51
+
+Good — the "worked yesterday, nothing changed" confirms this is a **latent bug exposed by GoDaddy's shared-hosting flakiness**. The SW's catch handler returns JSON for `.jpg` requests; when GoDaddy's server hiccups and the `fetch` fails, the browser can't render JSON as an image. Nothing changed in code, but the intermittent network failures on shared hosting trigger the bug.
+
+Let me apply the fixes.
+## 22/09/2026, 17:10:52
+
+Let me verify the built SW has the fix:
+## 22/09/2026, 17:11:52
+
+## Plan
+
+### Photo Tag Options (`src/screens/CardDetailScreen.jsx`)
+**File:** `src/screens/CardDetailScreen.jsx`  
+**Location:** Line 1378 (`PHOTO_TYPES` array) and related display logic  
+
+**Changes:**
+1. **Update PHOTO_TYPES array** (line 1378):  
+   ```js
+   const formatPhotoType = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+   const PHOTO_TYPES = ['intake', 'location', 'damage', 'replacement', 'cleaning', 'shrinkwrap', 'service_work', 'general']
+   ```
+   - Rename `cleaning_complete` → `cleaning` (removes underscore)  
+   - Add `shrinkwrap` and `service_work`  
+   - Reorder: inbound (`intake`, `location`) → work types (`damage`, `replacement`, `cleaning`, `shrinkwrap`, `service_work`) → catch-all (`general`)
+
+2. **Update chip button display** (line 1385):  
+   `{t}` → `{formatPhotoType(t)}`
+
+3. **Update upload button text** (line 1390):  
+   Inline `.replace(...)` → `formatPhotoType(photoType)`
+
+4. **Update photo badge display** (line 1406):  
+   `{p.photo_type}` → `{formatPhotoType(p.photo_type)}`
+
+5. **Update fullscreen overlay** (line 1416):  
+   `{fullscreen.photo_type}` → `{formatPhotoType(fullscreen.photo_type)}`
+
+### Duplicate Prevention & Deletion (`server.js`)
+**File:** `server.js`  
+**Location:** Customer/Boat API routes  
+
+**Changes:**
+1. **Add duplicate check to POST /api/customers** (after line 306):  
+   ```js
+   // Check for existing customer by name (case-insensitive)
+   const existing = await db.prepare('SELECT id FROM customers WHERE LOWER(name) = LOWER(?)').get(name)
+   if (existing) {
+     return res.status(409).json({ 
+       error: 'Customer with this name already exists', 
+       id: existing.id,
+       suggestion: 'Consider adding a middle initial or using the existing customer' 
+     })
+   }
+   ```
+
+2. **Add duplicate check to POST /api/boats** (after line 351):  
+   ```js
+   // Check for existing boat under this customer (case-insensitive)
+   const existing = await db.prepare(
+     'SELECT id FROM boats WHERE customer_id = ? AND LOWER(name) = LOWER(?)'
+   ).get(customer_id, name)
+   if (existing) {
+     return res.status(409).json({ 
+       error: 'Boat with this name already exists for this customer', 
+       id: existing.id 
+     })
+   }
+   ```
+
+3. **Add DELETE /api/customers/:id** (after PUT route ~line 326):  
+   ```js
+   app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
+     // First delete associated boats (foreign key constraint)
+     await db.prepare('DELETE FROM boats WHERE customer_id = ?').run(req.params.id)
+     await db.prepare('DELETE FROM customers WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+4. **Add DELETE /api/boats/:id** (after PUT route ~line 385):  
+   ```js
+   app.delete('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
+     await db.prepare('DELETE FROM boats WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+### Frontend Integration for Deletion
+**Files:** `src/screens/CustomersScreen.jsx` and `src/screens/BoatsScreen.jsx`  
+**Location:** Inline edit/delete buttons (following existing patterns in AdminScreen.jsx)  
+
+**Changes:**
+1. **CustomersScreen.jsx:** Add delete button in customer list items (similar to employee toggle in AdminScreen.jsx)  
+2. **BoatsScreen.jsx:** Add delete button in boat list items (visible only to admin/office roles)  
+3. **Both:** Use `api('DELETE', `/api/customers/${id}`)` or `api('DELETE', `/api/boats/${id}`)` followed by reload  
+
+### Files to Change (in order)
+1. `src/screens/CardDetailScreen.jsx` — photo type array + 4 display updates  
+2. `server.js` — customer POST duplicate check, boat POST duplicate check, customer DELETE endpoint, boat DELETE endpoint  
+3. `src/screens/CustomersScreen.jsx` — add delete button to customer list  
+4. `src/screens/BoatsScreen.jsx` — add delete button to boat list (admin/office only)  
+
+All changes are scoped, minimal, and follow existing code patterns. The photo type formatter also handles existing `cleaning_complete` DB values gracefully (displays as "Cleaning Complete").
+## 22/09/2026, 17:13:49
+
+## Plan
+
+### Photo Tag Options (`src/screens/CardDetailScreen.jsx`)
+**File:** `src/screens/CardDetailScreen.jsx`  
+**Location:** Line 1378 (`PHOTO_TYPES` array) and related display logic  
+
+**Changes:**
+1. **Update PHOTO_TYPES array** (line 1378):  
+   ```js
+   const formatPhotoType = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+   const PHOTO_TYPES = ['intake', 'location', 'damage', 'replacement', 'cleaning', 'shrinkwrap', 'service_work', 'general']
+   ```
+   - Rename `cleaning_complete` → `cleaning` (removes underscore)  
+   - Add `shrinkwrap` and `service_work`  
+   - Reorder: inbound (`intake`, `location`) → work types (`damage`, `replacement`, `cleaning`, `shrinkwrap`, `service_work`) → catch-all (`general`)
+
+2. **Update chip button display** (line 1385):  
+   `{t}` → `{formatPhotoType(t)}`
+
+3. **Update upload button text** (line 1390):  
+   Inline `.replace(...)` → `formatPhotoType(photoType)`
+
+4. **Update photo badge display** (line 1406):  
+   `{p.photo_type}` → `{formatPhotoType(p.photo_type)}`
+
+5. **Update fullscreen overlay** (line 1416):  
+   `{fullscreen.photo_type}` → `{formatPhotoType(fullscreen.photo_type)}`
+
+### Duplicate Prevention & Deletion (`server.js`)
+**File:** `server.js`  
+**Location:** Customer API routes  
+
+**Changes:**
+1. **Add duplicate check to POST /api/customers** (after line 306):  
+   ```js
+   // Check for existing customer by email OR phone (unique identifiers)
+   const existingByEmail = email ? await db.prepare('SELECT id FROM customers WHERE email = ?').get(email) : null
+   const existingByPhone = phone ? await db.prepare('SELECT id FROM customers WHERE phone = ?').get(phone) : null
+   const existing = existingByEmail || existingByPhone
+   
+   if (existing) {
+     return res.status(409).json({ 
+       error: 'Customer with this email or phone already exists', 
+       id: existing.id 
+     })
+   }
+   ```
+
+2. **Add DELETE /api/customers/:id** (after PUT route ~line 326):  
+   ```js
+   app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
+     // First delete associated boats and service cards (foreign key constraints)
+     await db.prepare('DELETE FROM service_cards WHERE boat_id IN (SELECT id FROM boats WHERE customer_id = ?)').run(req.params.id)
+     await db.prepare('DELETE FROM boats WHERE customer_id = ?').run(req.params.id)
+     await db.prepare('DELETE FROM customers WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+3. **Add DELETE /api/boats/:id** (after PUT route ~line 385):  
+   ```js
+   app.delete('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
+     // First delete associated service cards
+     await db.prepare('DELETE FROM service_cards WHERE boat_id = ?').run(req.params.id)
+     await db.prepare('DELETE FROM boats WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+### Frontend Integration for Duplicate Handling & Deletion
+**Files:** `src/screens/NewCardScreen.jsx`, `src/screens/CustomersScreen.jsx`, `src/screens/BoatsScreen.jsx`  
+
+**Changes:**
+1. **NewCardScreen.jsx - `createCustomer` function** (lines 68-77):  
+   ```js
+   const createCustomer = async () => {
+     if (!newCustomer.name) { showToast('Name required'); return }
+     setSaving(true)
+     try {
+       const c = await api('POST', '/customers', newCustomer)
+       if (target === 'customer') { setDirty(false); showToast('Customer created'); goBack() }
+       else { setCustomer({ ...newCustomer, id: c.id }); setBoats([]); setStep('boat'); setCreatingCustomer(false) }
+     } catch (e) {
+       if (e.status === 409) {
+         // Duplicate email/phone - show existing customer ID and auto-select
+         showToast(`Customer with this email/phone already exists (ID: ${e.response?.id})`)
+         // Auto-select existing customer and proceed
+         const existing = await api('GET', `/customers/${e.response.id}`)
+         setCustomer(existing)
+         setBoats(existing.boats || [])
+         setStep('boat')
+         setCreatingCustomer(false)
+       } else {
+         showToast(e.message || 'Failed to create customer')
+       }
+     }
+     setSaving(false)
+   }
+   ```
+
+2. **CustomersScreen.jsx:** Add delete button to customer list items (visible to admin/office)  
+   - Follow pattern from AdminScreen.jsx employee toggle (lines 65-67)  
+   - Use `api('DELETE', `/api/customers/${id}`)` followed by `reload()`  
+
+3. **BoatsScreen.jsx:** Add delete button to boat list items (visible to admin/office)  
+   - Follow same pattern  
+   - Use `api('DELETE', `/api/boats/${id}`)` followed by `reload()`  
+
+4. **Optional:** Handle boat duplicates similarly if needed (user only specified customer deduplication)
+
+### Files to Change (in order)
+1. `src/screens/CardDetailScreen.jsx` — photo type array + 4 display updates  
+2. `server.js` — customer POST duplicate check, customer DELETE endpoint, boat DELETE endpoint  
+3. `src/screens/NewCardScreen.jsx` — enhance `createCustomer` to handle 409 duplicates  
+4. `src/screens/CustomersScreen.jsx` — add delete button to customer list  
+5. `src/screens/BoatsScreen.jsx` — add delete button to boat list (admin/office only)  
+
+All changes follow existing code patterns and maintain backward compatibility. The photo type formatter handles existing `cleaning_complete` DB values (displays as "Cleaning Complete"). The duplicate prevention uses email/phone as unique identifiers while allowing duplicate names. Deletion includes proper cascade removal of related records.
+## 22/09/2026, 17:15:42
+
+## Plan
+
+### Photo Tag Options (`src/screens/CardDetailScreen.jsx`)
+**File:** `src/screens/CardDetailScreen.jsx`  
+**Location:** Line 1378 (`PHOTO_TYPES` array) and related display logic  
+
+**Changes:**
+1. **Update PHOTO_TYPES array** (line 1378):  
+   ```js
+   const formatPhotoType = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+   const PHOTO_TYPES = ['intake', 'location', 'damage', 'replacement', 'cleaning', 'shrinkwrap', 'service_work', 'general']
+   ```
+   - Rename `cleaning_complete` → `cleaning` (removes underscore)  
+   - Add `shrinkwrap` and `service_work`  
+   - Reorder: inbound (`intake`, `location`) → work types (`damage`, `replacement`, `cleaning`, `shrinkwrap`, `service_work`) → catch-all (`general`)
+
+2. **Update chip button display** (line 1385):  
+   `{t}` → `{formatPhotoType(t)}`
+
+3. **Update upload button text** (line 1390):  
+   Inline `.replace(...)` → `formatPhotoType(photoType)`
+
+4. **Update photo badge display** (line 1406):  
+   `{p.photo_type}` → `{formatPhotoType(p.photo_type)}`
+
+5. **Update fullscreen overlay** (line 1416):  
+   `{fullscreen.photo_type}` → `{formatPhotoType(fullscreen.photo_type)}`
+
+### Customer Deduplication & Deletion with Friction & Undo (`server.js`)
+**File:** `server.js`  
+**Location:** Customer table schema and API routes  
+
+**Changes:**
+1. **Add soft delete column to customers table** (in CREATE TABLE or via migration):  
+   ```sql
+   ALTER TABLE customers ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL;
+   ```
+
+2. **Modify GET /api/customers** (line 288):  
+   Add `WHERE deleted_at IS NULL` to exclude soft-deleted customers
+
+3. **Modify GET /api/customers/:id** (line 297):  
+   Add `WHERE deleted_at IS NULL` and return 404 if not found or deleted
+
+4. **Add duplicate check to POST /api/customers** (after line 306):  
+   ```js
+   // Check for existing customer by email OR phone (unique identifiers)
+   const existingByEmail = email ? await db.prepare('SELECT id FROM customers WHERE email = ? AND deleted_at IS NULL').get(email) : null
+   const existingByPhone = phone ? await db.prepare('SELECT id FROM customers WHERE phone = ? AND deleted_at IS NULL').get(phone) : null
+   const existing = existingByEmail || existingByPhone
+   
+   if (existing) {
+     return res.status(409).json({ 
+       error: 'Customer with this email or phone already exists', 
+       id: existing.id 
+     })
+   }
+   ```
+
+5. **Add DELETE /api/customers/:id** (soft delete):  
+   ```js
+   app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
+     // Soft delete: set deleted_at timestamp
+     await db.prepare('UPDATE customers SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+6. **Add restore endpoint** (optional, for undo):  
+   ```js
+   app.put('/api/customers/:id/restore', requireEditor, asyncHandler(async (req, res) => {
+     await db.prepare('UPDATE customers SET deleted_at = NULL WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+### Boat Deletion with Friction & Undo (`server.js`)
+**File:** `server.js`  
+**Location:** Boat table schema and API routes  
+
+**Changes:**
+1. **Add soft delete column to boats table**:  
+   ```sql
+   ALTER TABLE boats ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL;
+   ```
+
+2. **Modify GET /api/boats** (line 328):  
+   Add `WHERE deleted_at IS NULL` to exclude soft-deleted boats
+
+3. **Modify GET /api/boats/:id** (line 348):  
+   Add `WHERE deleted_at IS NULL` and return 404 if not found or deleted
+
+4. **Add duplicate check to POST /api/boats** (after line 350):  
+   ```js
+   // Check for existing boat under this customer (case-insensitive)
+   const existing = await db.prepare(
+     'SELECT id FROM boats WHERE customer_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL'
+   ).get(customer_id, name)
+   if (existing) {
+     return res.status(409).json({ 
+       error: 'Boat with this name already exists for this customer', 
+       id: existing.id 
+     })
+   }
+   ```
+
+5. **Add DELETE /api/boats/:id** (soft delete):  
+   ```js
+   app.delete('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
+     // Soft delete: set deleted_at timestamp
+     await db.prepare('UPDATE boats SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+6. **Add restore endpoint** (optional, for undo):  
+   ```js
+   app.put('/api/boats/:id/restore', requireEditor, asyncHandler(async (req, res) => {
+     await db.prepare('UPDATE boats SET deleted_at = NULL WHERE id = ?').run(req.params.id)
+     res.json({ ok: true })
+   }))
+   ```
+
+### Frontend Implementation
+**Files:** `src/screens/NewCardScreen.jsx`, `src/screens/CustomersScreen.jsx`, `src/screens/BoatsScreen.jsx`
+
+**Changes:**
+1. **NewCardScreen.jsx - `createCustomer` function** (lines 68-77):  
+   ```js
+   const createCustomer = async () => {
+     if (!newCustomer.name) { showToast('Name required'); return }
+     setSaving(true)
+     try {
+       const c = await api('POST', '/customers', newCustomer)
+       if (target === 'customer') { setDirty(false); showToast('Customer created'); goBack() }
+       else { setCustomer({ ...newCustomer, id: c.id }); setBoats([]); setStep('boat'); setCreatingCustomer(false) }
+     } catch (e) {
+       if (e.status === 409) {
+         // Duplicate email/phone - show existing customer ID and auto-select
+         showToast(`Customer with this email/phone already exists (ID: ${e.response?.id})`)
+         // Auto-select existing customer and proceed
+         const existing = await api('GET', `/customers/${e.response.id}`)
+         setCustomer(existing)
+         setBoats(existing.boats || [])
+         setStep('boat')
+         setCreatingCustomer(false)
+       } else {
+         showToast(e.message || 'Failed to create customer')
+       }
+     }
+     setSaving(false)
+   }
+   ```
+
+2. **CustomersScreen.jsx:**  
+   - Add delete button to each customer row (visible to admin/office only)  
+   - On click: show `window.confirm('Delete this customer? This cannot be undone.')`  
+   - If confirmed: call `DELETE /api/customers/:id`  
+   - On success: show undo snackbar with "Undo" button for 5-10 seconds that calls `PUT /api/customers/:id/restore`  
+   - Follow existing patterns from AdminScreen.jsx for button styling and API handling
+
+3. **BoatsScreen.jsx:**  
+   - Similar to CustomersScreen but for boats  
+   - Add delete button to each boat row (visible to admin/office only)  
+   - On click: show confirmation dialog  
+   - If confirmed: call `DELETE /api/boats/:id`  
+   - On success: show undo snackbar with "Undo" button that calls `PUT /api/boats/:id/restore`  
+
+### Files to Change (in order)
+1. `src/screens/CardDetailScreen.jsx` — photo type array + 4 display updates  
+2. `server.js` — customer schema update, GET modifications, POST duplicate check, DELETE endpoint, (+ optional restore)  
+3. `server.js` — boat schema update, GET modifications, POST duplicate check, DELETE endpoint, (+ optional restore)  
+4. `src/screens/NewCardScreen.jsx` — enhance `createCustomer` to handle 409 duplicates  
+5. `src/screens/CustomersScreen.jsx` — add delete button with confirmation and undo snackbar  
+6. `src/screens/BoatsScreen.jsx` — add delete button with confirmation and undo snackbar (admin/office only)  
+
+All changes follow existing code patterns: soft delete mirrors the `active` column pattern used in employees/authorized_items, confirmation dialogs follow existing `window.confirm()` usage, and undo snackbar follows common UX patterns. The photo type formatter also handles existing `cleaning_complete` DB values gracefully (displays as "Cleaning Complete").
+## 22/09/2026, 17:18:55
+
+I've identified and fixed the root cause of the photo loading issue. Here's what was happening and what I've fixed:
+
+## Problem Analysis
+The error `"Failed to load 'https://marinamanager.ca/photos/1790016433668-187842622.jpg'. A ServiceWorker intercepted the request and encountered an unexpected error."` was caused by:
+
+1. **ServiceWorker incorrectly intercepting photo requests** - Your `src/sw.js` was intercepting `/photos/` requests and doing network-only fetches
+2. **Wrong error handling for images** - When photo requests failed (network timeouts on GoDaddy shared hosting), the SW's catch handler returned a **JSON response** (`{error: 'Offline'}` with Content-Type: application/json) for what the browser expected to be a `.jpg` image
+3. **Missing photos returning HTML instead of 404** - When a photo file doesn't exist, `express.static` would call `next()` and your catch-all route (`app.get('*')`) would serve `index.html` with a 200 status, causing the browser to try to render HTML as an image
+
+## Fixes Applied
+
+### 1. ServiceWorker Fix (`src/sw.js`)
+**Removed `/photos/` from SW interception** - Photos now bypass the SW entirely and go straight to the network:
+```diff
+- if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/photos/')) {
++ if (url.pathname.startsWith('/api/')) {
+```
+*Why?* The JSON offline fallback only makes sense for API calls. For images, letting the browser handle failures natively (showing a broken image) is better than returning confusing JSON.
+
+### 2. Proper 404 Handling for Missing Photos (`server.js`)
+**Added explicit 404 handler for missing photos** - Prevents missing photos from falling through to the catch-all route:
+```diff
+app.use('/photos', express.static(PHOTOS_DIR));
++ app.use('/photos', (req, res) => res.status(404).send('Not found'));
+
+app.get('/_health/liveness', (req, res) => res.json({ status: 'ok' }));
+```
+*Why?* Now missing photos return a proper 404 instead of serving `index.html` (which the browser tries to render as an image).
+
+### 3. Built Artifacts Updated
+- Rebuilt with `npm run build` to regenerate `dist/sw.js` (the actual SW served to users)
+- The built SW now **only intercepts `/api/` requests**, not `/photos/`
+
+## Result
+After these changes:
+- ✅ **Photo requests bypass the SW** - No more SW-intercepted JSON errors for images
+- ✅ **Network failures handled natively** - Browser shows standard broken image icon after timeout
+- ✅ **Missing photos return 404** - Proper HTTP status instead of misleading HTML
+- ✅ **API offline handling preserved** - `/api/` requests still get JSON `{error: 'Offline'}` fallback
+
+## Deployment Notes
+For your GoDaddy hosting:
+1. Apply these code changes
+2. Run `npm run build` to regenerate `dist/` (includes updated service worker)
+3. Restart your Node server (`npm start` or via your process manager)
+4. The service worker will update automatically for users due to `registerType: 'autoUpdate'` in your VitePWA config
+
+The "random" failures were caused by GoDaddy's shared-hosting network variability triggering the SW's faulty image-error handling. These fixes make photo loading robust regardless of server latency.

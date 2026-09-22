@@ -181,6 +181,7 @@ module.exports = async function createApp() {
   }
   app.use(express.static(staticDir));
   app.use('/photos', express.static(PHOTOS_DIR));
+  app.use('/photos', (req, res) => res.status(404).send('Not found'));
 
   app.get('/_health/liveness', (req, res) => res.json({ status: 'ok' }));
   app.get('/_health/readiness', (req, res) => res.json({ status: 'ok' }));
