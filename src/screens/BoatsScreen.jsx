@@ -138,11 +138,24 @@ export default function BoatsScreen({ params }) {
                 <div style={{ fontFamily: 'Bebas Neue', fontSize: 18, letterSpacing: 1, color: 'var(--text)' }}>{b.name || '(no name)'}</div>
                 <div style={{ fontSize: 13, color: 'var(--text3)' }}>{b.customer_name} · {b.model} · {b.licence}{b.trailer_licence ? ` · T:${b.trailer_licence}` : ''}</div>
               </div>
-              {(employee?.role === 'admin' || employee?.role === 'office') && (
-                <button onClick={() => { originalBoatRef.current = { ...b }; setEditingBoat(b) }} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 8, flexShrink: 0 }}>
-                  <Icon name="edit" size={18} />
-                </button>
-              )}
+{(employee?.role === 'admin' || employee?.role === 'office') && (
+                 <button onClick={() => { originalBoatRef.current = { ...b }; setEditingBoat(b) }} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 8, flexShrink: 0 }}>
+                   <Icon name="edit" size={18} />
+                 </button>
+               )}
+               {(employee?.role === 'admin' || employee?.role === 'office') && (
+                 <button onClick={(e) => {
+                   e.stopPropagation();
+                   if (window.confirm('Delete this boat? This action cannot be undone.')) {
+                     api('DELETE', `/api/boats/${b.id}`).then(() => {
+                       showToast('Boat deleted');
+                       fetchBoats();
+                     }).catch(() => showToast('Failed to delete boat'));
+                   }
+                 }} style={{ background: 'none', border: 'none', color: 'var(--warn)', cursor: 'pointer', padding: 8, flexShrink: 0 }}>
+                   <Icon name="trash" size={18} />
+                 </button>
+               )}
             </div>
           ))
         )}

@@ -67,11 +67,24 @@ export default function CustomersScreen() {
                 <div style={{ fontFamily: 'Bebas Neue', fontSize: 18, letterSpacing: 1, color: 'var(--text)' }}>{c.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--text3)' }}>{c.phone || c.email || 'No contact info'}</div>
               </div>
-              {(employee?.role === 'admin' || employee?.role === 'office') && (
-                <button onClick={(e) => editCustomer(c, e)} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 6 }}>
-                  <Icon name="edit" size={16} />
-                </button>
-              )}
+{(employee?.role === 'admin' || employee?.role === 'office') && (
+                 <button onClick={(e) => editCustomer(c, e)} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 6 }}>
+                   <Icon name="edit" size={16} />
+                 </button>
+               )}
+               {(employee?.role === 'admin' || employee?.role === 'office') && (
+                 <button onClick={(e) => {
+                   e.stopPropagation();
+                   if (window.confirm('Delete this customer? This action cannot be undone.')) {
+                     api('DELETE', `/api/customers/${c.id}`).then(() => {
+                       showToast('Customer deleted');
+                       fetchCustomers();
+                     }).catch(() => showToast('Failed to delete customer'));
+                   }
+                 }} style={{ background: 'none', border: 'none', color: 'var(--warn)', cursor: 'pointer', padding: 6 }}>
+                   <Icon name="trash" size={16} />
+                 </button>
+               )}
             </div>
           ))
         )}

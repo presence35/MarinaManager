@@ -1375,19 +1375,20 @@ function PhotosTab({ card, reload }) {
     } catch (e) { showToast('Failed') }
   }
 
-  const PHOTO_TYPES = ['intake', 'damage', 'replacement', 'cleaning_complete', 'location', 'general']
+  const formatPhotoType = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+   const PHOTO_TYPES = ['intake', 'location', 'damage', 'replacement', 'cleaning', 'shrinkwrap', 'service_work', 'general']
 
   return (
     <div>
       <div style={{ padding: '10px 12px 6px' }}>
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-          {PHOTO_TYPES.map((t) => (
-            <button key={t} className={`chip ${photoType === t ? 'on' : ''}`} style={{ textTransform: 'capitalize' }} onClick={() => setPhotoType(t)}>{t}</button>
-          ))}
+{PHOTO_TYPES.map((t) => (
+             <button key={t} className={`chip ${photoType === t ? 'on' : ''}`} style={{ textTransform: 'capitalize' }} onClick={() => setPhotoType(t)}>{formatPhotoType(t)}</button>
+           ))}
         </div>
         <button className={`btn ${uploading ? 'btn-outline' : 'btn-accent'}`} onClick={handleUpload} disabled={uploading}>
           <Icon name="camera" size={16} color={uploading ? 'var(--text2)' : '#fff'} />
-          {uploading ? 'Uploading...' : `Add ${photoType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Photo`}
+          {uploading ? 'Uploading...' : `Add ${formatPhotoType(photoType)} Photo`}
         </button>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
           onChange={(e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
@@ -1403,7 +1404,7 @@ function PhotosTab({ card, reload }) {
           {card.photos.map((p) => (
             <div key={p.id} className="photo-thumb" onClick={() => setFullscreen(p)}>
               <img src={`/photos/${p.filename}`} alt={p.caption || p.photo_type} />
-              <div className="photo-type-badge">{p.photo_type}</div>
+              <div className="photo-type-badge">{formatPhotoType(p.photo_type)}</div>
             </div>
           ))}
         </div>
@@ -1413,7 +1414,7 @@ function PhotosTab({ card, reload }) {
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#000', borderRadius: 12, overflow: 'auto', maxWidth: '100%', maxHeight: '80dvh', position: 'relative', WebkitOverflowScrolling: 'touch' }}>
             <img src={`/photos/${fullscreen.filename}`} style={{ width: '100%', height: 'auto', display: 'block' }} alt="" />
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(0,0,0,.8)' }}>
-              <span style={{ color: '#fff', fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{fullscreen.photo_type}</span>
+              <span style={{ color: '#fff', fontFamily: 'Barlow Condensed', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{formatPhotoType(fullscreen.photo_type)}</span>
               <button onClick={() => { deletePhoto(fullscreen.id); setFullscreen(null) }}
                 style={{ background: 'rgba(214,64,69,.8)', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 10px', fontFamily: 'Barlow Condensed', fontWeight: 700, fontSize: 12, cursor: 'pointer', letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 DELETE

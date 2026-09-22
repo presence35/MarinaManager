@@ -409,3 +409,63 @@ go.  we need friction on deleting things w entires in them.  also an undo for a 
 ## 22/09/2026, 17:16:57
 
 continue
+## 22/09/2026, 17:19:51
+
+go
+## 22/09/2026, 17:21:44
+
+that didn't fix it.  now i don't get console error, but sitll no pic.
+## 22/09/2026, 17:23:09
+
+nm, yes i do.
+
+Failed to load ‘https://marinamanager.ca/photos/1790016438900-249123696.jpg’. A ServiceWorker intercepted the request and encountered an unexpected error. sw.js:1:16690
+
+## 22/09/2026, 17:24:41
+
+seems there isn't even a \photos direction on godaddy!  
+there's data\photos but it seems empty.
+## 22/09/2026, 17:25:49
+
+seems there isn't even a \photos direction on godaddy!  
+there's data\photos but it seems empty.
+
+
+goddaddy label: The file manager has two tabs for the two locations shared with your running preview app:
+    App (/app) — your application's source files, where your app lives and code (zip) downloads come from. Anything in its public/ folder is served publicly on the web; the public/assets subfolder is also durable across deploys (like Private Storage), while the rest of the app is rebuilt from your code on each deploy.
+
+
+Files
+backup
+data
+db
+public
+scripts
+src
+airo-media.json
+build-version.json
+components.json
+env.example
+eslint.config.js
+eslint.security.config.js
+index.html
+package.json
+postcss.config.js
+README.md
+server.js
+tailwind.config.js
+tsconfig.json
+tsconfig.node.json
+vite.config.js
+vite.config.ts
+vitest.config.ts
+22 folders · 137 files
+    Private Storage (/private) — a private data store that is never served publicly on the web and is excluded from code (zip) downloads, but is durable across deploys. Best for file-based databases (e.g. SQLite) and other data you want to keep private.
+## 22/09/2026, 17:28:02
+
+we've been using ephemeral all this time? How's the database stille xist then?  Obv the pics should stay perm.
+## 22/09/2026, 17:34:23
+
+so our pics are gone? Ugh.
+
+i set the env.  go

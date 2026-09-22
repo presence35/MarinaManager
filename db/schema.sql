@@ -16,28 +16,30 @@ CREATE TABLE IF NOT EXISTS device_tokens (
 );
 
 CREATE TABLE IF NOT EXISTS customers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  address TEXT,
-  city TEXT,
-  postal_code TEXT,
-  phone TEXT,
-  email TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+   id INTEGER PRIMARY KEY AUTOINCREMENT,
+   name TEXT NOT NULL,
+   address TEXT,
+   city TEXT,
+   postal_code TEXT,
+   phone TEXT,
+   email TEXT,
+   created_at TEXT DEFAULT (datetime('now')),
+   deleted_at TEXT NULL DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS boats (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  customer_id INTEGER NOT NULL,
-  name TEXT,
-  motor_type TEXT,
-  model TEXT,
-  licence TEXT,
-  trailer_licence TEXT,
-  rate_type TEXT DEFAULT 'SW',
-  length_ft REAL,
-  created_at TEXT DEFAULT (datetime('now')),
-  FOREIGN KEY (customer_id) REFERENCES customers(id)
+   id INTEGER PRIMARY KEY AUTOINCREMENT,
+   customer_id INTEGER NOT NULL,
+   name TEXT,
+   motor_type TEXT,
+   model TEXT,
+   licence TEXT,
+   trailer_licence TEXT,
+   rate_type TEXT DEFAULT 'SW',
+   length_ft REAL,
+   created_at TEXT DEFAULT (datetime('now')),
+   deleted_at TEXT NULL DEFAULT NULL,
+   FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
 
 CREATE TABLE IF NOT EXISTS service_cards (

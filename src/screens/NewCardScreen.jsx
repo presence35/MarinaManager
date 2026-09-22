@@ -65,16 +65,29 @@ export default function NewCardScreen({ params = {} }) {
     if (target === 'boat') setCreatingBoat(true)
   }
 
-  const createCustomer = async () => {
-    if (!newCustomer.name) { showToast('Name required'); return }
-    setSaving(true)
-    try {
-      const c = await api('POST', '/customers', newCustomer)
-      if (target === 'customer') { setDirty(false); showToast('Customer created'); goBack() }
-      else { setCustomer({ ...newCustomer, id: c.id }); setBoats([]); setStep('boat'); setCreatingCustomer(false) }
-    } catch (e) { showToast(e.message || 'Failed to create customer') }
-    setSaving(false)
-  }
+const createCustomer = async () => {
+     if (!newCustomer.name) { showToast('Name required'); return }
+     setSaving(true)
+     try {
+       const c = await api('POST', '/customers', newCustomer)
+       if (target === 'customer') { setDirty(false); showToast('Customer created'); goBack() }
+       else { setCustomer({ ...newCustomer, id: c.id }); setBoats([]); setStep('boat'); setCreatingCustomer(false) }
+     } catch (e) {
+       if (e.status === 409) {
+         // Duplicate email/phone - show existing customer ID and auto-select
+         showToast(`Customer with this email/phone already exists (ID: ${e.response?.id})`)
+         // Auto-select existing customer and proceed
+         const existing = await api('GET', `/customers/${e.response.id}`)
+         setCustomer(existing)
+         setBoats(existing.boats || [])
+         setStep('boat')
+         setCreatingCustomer(false)
+       } else {
+         showToast(e.message || 'Failed to create customer')
+       }
+     }
+     setSaving(false)
+   }
 
   const selectBoat = (b) => {
     if (target === 'boat') { showToast('Boat already exists'); goBack(); return }
