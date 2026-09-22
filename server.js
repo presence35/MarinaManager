@@ -1,4 +1,4 @@
-const express = require('express'); 
+const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -42,33 +42,33 @@ module.exports = async function createApp() {
     // Column already exists, ignore
   }
 
-try {
-     await db.exec("ALTER TABLE boats ADD COLUMN licence TEXT");
-     console.log("  Added licence column to boats");
-   } catch (e) {
-     // Column already exists, ignore
-   }
+  try {
+    await db.exec("ALTER TABLE boats ADD COLUMN licence TEXT");
+    console.log("  Added licence column to boats");
+  } catch (e) {
+    // Column already exists, ignore
+  }
 
-   try {
-     await db.exec("ALTER TABLE boats ADD COLUMN trailer_licence TEXT");
-     console.log("  Added trailer_licence column to boats");
-   } catch (e) {
-     // Column already exists, ignore
-   }
+  try {
+    await db.exec("ALTER TABLE boats ADD COLUMN trailer_licence TEXT");
+    console.log("  Added trailer_licence column to boats");
+  } catch (e) {
+    // Column already exists, ignore
+  }
 
-   try {
-     await db.exec("ALTER TABLE customers ADD COLUMN deleted_at TEXT NULL DEFAULT NULL");
-     console.log("  Added deleted_at column to customers");
-   } catch (e) {
-     // Column already exists, ignore
-   }
+  try {
+    await db.exec("ALTER TABLE customers ADD COLUMN deleted_at TEXT NULL DEFAULT NULL");
+    console.log("  Added deleted_at column to customers");
+  } catch (e) {
+    // Column already exists, ignore
+  }
 
-   try {
-     await db.exec("ALTER TABLE boats ADD COLUMN deleted_at TEXT NULL DEFAULT NULL");
-     console.log("  Added deleted_at column to boats");
-   } catch (e) {
-     // Column already exists, ignore
-   }
+  try {
+    await db.exec("ALTER TABLE boats ADD COLUMN deleted_at TEXT NULL DEFAULT NULL");
+    console.log("  Added deleted_at column to boats");
+  } catch (e) {
+    // Column already exists, ignore
+  }
 
   try {
     await db.exec("ALTER TABLE boats ADD COLUMN rate_type TEXT DEFAULT 'SW'");
@@ -303,41 +303,41 @@ try {
     res.json({ ok: true });
   }));
 
-app.get('/api/customers', requireAuth, asyncHandler(async (req, res) => {
-     const q = req.query.q;
-     if (q) {
-       res.json(await db.prepare(`SELECT * FROM customers WHERE deleted_at IS NULL AND (name LIKE ? OR phone LIKE ? OR email LIKE ?) ORDER BY name LIMIT 30`).all(`%${q}%`, `%${q}%`, `%${q}%`));
-     } else {
-       res.json(await db.prepare('SELECT * FROM customers WHERE deleted_at IS NULL ORDER BY name').all());
-     }
-   }));
+  app.get('/api/customers', requireAuth, asyncHandler(async (req, res) => {
+    const q = req.query.q;
+    if (q) {
+      res.json(await db.prepare(`SELECT * FROM customers WHERE deleted_at IS NULL AND (name LIKE ? OR phone LIKE ? OR email LIKE ?) ORDER BY name LIMIT 30`).all(`%${q}%`, `%${q}%`, `%${q}%`));
+    } else {
+      res.json(await db.prepare('SELECT * FROM customers WHERE deleted_at IS NULL ORDER BY name').all());
+    }
+  }));
 
-app.get('/api/customers/:id', requireAuth, asyncHandler(async (req, res) => {
-     const customer = await db.prepare('SELECT * FROM customers WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
-     if (!customer) return res.status(404).json({ error: 'Not found' });
-     customer.boats = await db.prepare('SELECT * FROM boats WHERE customer_id = ? AND deleted_at IS NULL ORDER BY name').all(req.params.id);
-     res.json(customer);
-   }));
+  app.get('/api/customers/:id', requireAuth, asyncHandler(async (req, res) => {
+    const customer = await db.prepare('SELECT * FROM customers WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+    if (!customer) return res.status(404).json({ error: 'Not found' });
+    customer.boats = await db.prepare('SELECT * FROM boats WHERE customer_id = ? AND deleted_at IS NULL ORDER BY name').all(req.params.id);
+    res.json(customer);
+  }));
 
-app.post('/api/customers', requireEditor, asyncHandler(async (req, res) => {
-     const { name, address = null, city = null, postal_code = null, phone = null, email = null } = req.body;
-     if (!name) return res.status(400).json({ error: 'Name required' });
-     
-     // Check for existing customer by email OR phone (unique identifiers)
-     const existingByEmail = email ? await db.prepare('SELECT id FROM customers WHERE email = ? AND deleted_at IS NULL').get(email) : null;
-     const existingByPhone = phone ? await db.prepare('SELECT id FROM customers WHERE phone = ? AND deleted_at IS NULL').get(phone) : null;
-     const existing = existingByEmail || existingByPhone;
-     
-     if (existing) {
-       return res.status(409).json({ 
-         error: 'Customer with this email or phone already exists', 
-         id: existing.id 
-});
-);
-     
-     const r = await db.prepare(`INSERT INTO customers (name, address, city, postal_code, phone, email) VALUES (?, ?, ?, ?, ?, ?)`).run(name, address, city, postal_code, phone, email);
-     res.json({ id: r.lastInsertRowid, name, phone });
-   }));
+  app.post('/api/customers', requireEditor, asyncHandler(async (req, res) => {
+    const { name, address = null, city = null, postal_code = null, phone = null, email = null } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+    
+    // Check for existing customer by email OR phone (unique identifiers)
+    const existingByEmail = email ? await db.prepare('SELECT id FROM customers WHERE email = ? AND deleted_at IS NULL').get(email) : null;
+    const existingByPhone = phone ? await db.prepare('SELECT id FROM customers WHERE phone = ? AND deleted_at IS NULL').get(phone) : null;
+    const existing = existingByEmail || existingByPhone;
+    
+    if (existing) {
+      return res.status(409).json({ 
+        error: 'Customer with this email or phone already exists', 
+        id: existing.id 
+      });
+    }
+    
+    const r = await db.prepare(`INSERT INTO customers (name, address, city, postal_code, phone, email) VALUES (?, ?, ?, ?, ?, ?)`).run(name, address, city, postal_code, phone, email);
+    res.json({ id: r.lastInsertRowid, name, phone });
+  }));
 
   app.put('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
     const { name, address, city, postal_code, phone, email } = req.body;
@@ -350,23 +350,24 @@ app.post('/api/customers', requireEditor, asyncHandler(async (req, res) => {
     if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
     if (email !== undefined) { updates.push('email = ?'); params.push(email); }
     if (updates.length) {
-params.push(req.params.id);
-       await db.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id=?`).run(...params);
-     }
-     res.json({ ok: true });
-});
-    app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
-      // Soft delete: set deleted_at timestamp
-      await db.prepare('UPDATE customers SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
-      res.json({ ok: true });
-    });
-    
-    app.put('/api/customers/:id/restore', requireEditor, asyncHandler(async (req, res) => {
-      await db.prepare('UPDATE customers SET deleted_at = NULL WHERE id = ?').run(req.params.id);
-      res.json({ ok: true });
-    }));
-    
-    app.get('/api/boats', requireAuth, asyncHandler(async (req, res) => {
+      params.push(req.params.id);
+      await db.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id=?`).run(...params);
+    }
+    res.json({ ok: true });
+  }));
+
+  app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
+    // Soft delete: set deleted_at timestamp
+    await db.prepare('UPDATE customers SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
+    res.json({ ok: true });
+  }));
+
+  app.put('/api/customers/:id/restore', requireEditor, asyncHandler(async (req, res) => {
+    await db.prepare('UPDATE customers SET deleted_at = NULL WHERE id = ?').run(req.params.id);
+    res.json({ ok: true });
+  }));
+
+  app.get('/api/boats', requireAuth, asyncHandler(async (req, res) => {
     const { q } = req.query;
     if (q) {
       res.json(await db.prepare(`
@@ -386,53 +387,53 @@ params.push(req.params.id);
     }
   }));
 
-app.post('/api/boats', requireEditor, asyncHandler(async (req, res) => {
-     try {
-       const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
-       if (!customer_id) return res.status(400).json({ error: 'Customer required' });
-       
-       // Check for existing boat under this customer (case-insensitive)
-       const existing = await db.prepare(
-         'SELECT id FROM boats WHERE customer_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL'
-       ).get(customer_id, name);
-       if (existing) {
-         return res.status(409).json({ 
-           error: 'Boat with this name already exists for this customer', 
-           id: existing.id 
-         });
-       }
-       
-       const r = await db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-         customer_id,
-         name || null,
-         motor_type || null,
-         model || null,
-         licence || null,
-         trailer_licence || null,
-         rate_type || 'SW',
-         length_ft || null
-       );
-       res.json({ id: r.lastInsertRowid });
-     } catch (e) {
-console.error('[BOAT CREATE ERROR]', e);
-       res.status(500).json({ error: e.message || 'Failed to create boat' });
-     }
-   }));
+  app.post('/api/boats', requireEditor, asyncHandler(async (req, res) => {
+    try {
+      const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
+      if (!customer_id) return res.status(400).json({ error: 'Customer required' });
+      
+      // Check for existing boat under this customer (case-insensitive)
+      const existing = await db.prepare(
+        'SELECT id FROM boats WHERE customer_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL'
+      ).get(customer_id, name);
+      if (existing) {
+        return res.status(409).json({ 
+          error: 'Boat with this name already exists for this customer', 
+          id: existing.id 
+        });
+      }
+      
+      const r = await db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        customer_id,
+        name || null,
+        motor_type || null,
+        model || null,
+        licence || null,
+        trailer_licence || null,
+        rate_type || 'SW',
+        length_ft || null
+      );
+      res.json({ id: r.lastInsertRowid });
+    } catch (e) {
+      console.error('[BOAT CREATE ERROR]', e);
+      res.status(500).json({ error: e.message || 'Failed to create boat' });
+    }
+  }));
 
-   app.get('/api/boats/:id', requireAuth, asyncHandler(async (req, res) => {
-     const boat = await db.prepare('SELECT * FROM boats WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
-     if (!boat) return res.status(404).json({ error: 'Not found' });
-     boat.customer = await db.prepare('SELECT * FROM customers WHERE id = ? AND deleted_at IS NULL').get(boat.customer_id);
-     res.json(boat);
-   }));
+  app.get('/api/boats/:id', requireAuth, asyncHandler(async (req, res) => {
+    const boat = await db.prepare('SELECT * FROM boats WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+    if (!boat) return res.status(404).json({ error: 'Not found' });
+    boat.customer = await db.prepare('SELECT * FROM customers WHERE id = ? AND deleted_at IS NULL').get(boat.customer_id);
+    res.json(boat);
+  }));
 
-app.put('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
-     // Check if boat exists and is not deleted
-     const existingBoat = await db.prepare('SELECT id FROM boats WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
-     if (!existingBoat) return res.status(404).json({ error: 'Not found' });
-     
-     const { name, motor_type, model, licence, trailer_licence, rate_type, length_ft } = req.body;
-     const updates = [];
+  app.put('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
+    // Check if boat exists and is not deleted
+    const existingBoat = await db.prepare('SELECT id FROM boats WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+    if (!existingBoat) return res.status(404).json({ error: 'Not found' });
+    
+    const { name, motor_type, model, licence, trailer_licence, rate_type, length_ft } = req.body;
+    const updates = [];
     const params = [];
     if (name !== undefined) { updates.push('name = ?'); params.push(name || null); }
     if (motor_type !== undefined) { updates.push('motor_type = ?'); params.push(motor_type || null); }
@@ -441,23 +442,19 @@ app.put('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
     if (trailer_licence !== undefined) { updates.push('trailer_licence = ?'); params.push(trailer_licence || null); }
     if (rate_type !== undefined) { updates.push('rate_type = ?'); params.push(rate_type || 'SW'); }
     if (length_ft !== undefined) { updates.push('length_ft = ?'); params.push(length_ft || null); }
-if (updates.length) {
-       params.push(req.params.id);
-       await db.prepare(`UPDATE boats SET ${updates.join(', ')} WHERE id=?`).run(...params);
-     }
-res.json({ ok: true });
-});
-    app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
-      // Soft delete: set deleted at timestamp
-      await db.prepare('UPDATE customers SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
-      res.json({ ok: true });
-    });
-    app.put('/api/boats/:id/restore', requireEditor, asyncHandler(async (req, res) => {
-      await db.prepare('UPDATE boats SET deleted_at = NULL WHERE id = ?').run(req.params.id);
-      res.json({ ok: true });
-    }));
-    
-    app.get('/api/assignments', requireAuth, asyncHandler(async (req, res) => {
+    if (updates.length) {
+      params.push(req.params.id);
+      await db.prepare(`UPDATE boats SET ${updates.join(', ')} WHERE id=?`).run(...params);
+    }
+    res.json({ ok: true });
+  }));
+
+  app.put('/api/boats/:id/restore', requireEditor, asyncHandler(async (req, res) => {
+    await db.prepare('UPDATE boats SET deleted_at = NULL WHERE id = ?').run(req.params.id);
+    res.json({ ok: true });
+  }));
+
+  app.get('/api/assignments', requireAuth, asyncHandler(async (req, res) => {
     const { employee_id } = req.query;
     if (employee_id) {
       res.json(await db.prepare(`
@@ -514,7 +511,7 @@ res.json({ ok: true });
     if (season) { where += ' AND sc.season_year = ?'; params.push(season); }
     if (scanned === '1') { where += ' AND sc.is_scanned = 1'; }
     if (q) { where += ' AND (c.name LIKE ? OR b.name LIKE ? OR sc.work_order_no LIKE ? OR b.licence LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
-    res.json(await db.prepare(`${CARD_SELECT} ${where} ORDER BY sc.updated_at DESC`).all(...params));
+    res.json(await db.prepare(`${CARD_SELECT}${where} ORDER BY sc.updated_at DESC`).all(...params));
   }));
 
   app.get('/api/cards/:id', requireAuth, asyncHandler(async (req, res) => {
@@ -658,7 +655,7 @@ res.json({ ok: true });
     const d = new Date(val);
     if (isNaN(d.getTime())) return null;
     const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
 
   app.put('/api/cards/:id/work', requireAuth, asyncHandler(async (req, res) => {
