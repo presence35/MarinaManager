@@ -355,7 +355,6 @@ params.push(req.params.id);
      }
      res.json({ ok: true });
 });
-    
     app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
       // Soft delete: set deleted_at timestamp
       await db.prepare('UPDATE customers SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
@@ -446,15 +445,13 @@ if (updates.length) {
        params.push(req.params.id);
        await db.prepare(`UPDATE boats SET ${updates.join(', ')} WHERE id=?`).run(...params);
      }
-     res.json({ ok: true });
+res.json({ ok: true });
 });
-    
-    app.delete('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
-      // Soft delete: set deleted_at timestamp
-      await db.prepare('UPDATE boats SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
+    app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
+      // Soft delete: set deleted at timestamp
+      await db.prepare('UPDATE customers SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
       res.json({ ok: true });
     });
-    
     app.put('/api/boats/:id/restore', requireEditor, asyncHandler(async (req, res) => {
       await db.prepare('UPDATE boats SET deleted_at = NULL WHERE id = ?').run(req.params.id);
       res.json({ ok: true });

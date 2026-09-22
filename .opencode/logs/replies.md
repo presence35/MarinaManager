@@ -6142,3 +6142,72 @@ After reviewing the deployment logs and your current codebase, I found that your
 **Note**: Photos uploaded before this fix were unfortunately lost (they were in ephemeral storage). Only newly uploaded photos after deploying this fix will persist correctly. You'll need to re-upload any important photos that were lost.
 
 The application is now ready for healthy deployment!
+## 22/09/2026, 17:56:41
+
+Let me get a bit more context to see the full PUT /api/boats/:id route:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 22/09/2026, 18:00:39
+
+Based on the error message and code analysis, the issue is a missing closing parenthesis in `server.js` at line 357. The ServiceWorker interception logic is already correct (only intercepting `/api/` requests), but there's a syntax error in the photo update endpoint handler.
+
+## Root Cause
+The error `SyntaxError: missing ) after argument list` at line 357 occurs because the `app.put('/api/customers/:id', ...)` call is missing a closing parenthesis. The structure should be:
+```javascript
+app.put('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
+  // ... function body ...
+}));  // Note: Two closing parentheses: one for asyncHandler, one for app.put
+```
+But currently shows:
+```javascript
+})  // Missing one closing parenthesis for app.put call
+```
+
+## Fix Required
+Change line 357 in `server.js` from:
+```javascript
+    });
+```
+to:
+```javascript
+    }));  // Add the missing closing parenthesis for app.put call
+```
+
+## Why This Fixes the Issue
+- The `asyncHandler` call wraps the async function: `asyncHandler(async (req, res) => { ... })`
+- This entire expression is the third argument to `app.put`: `app.put(..., ..., asyncHandler(...))`
+- Currently, after closing the arrow function (`}`) and the `asyncHandler` call (`)`), we're missing the final `)` to close the `app.put` call
+- Adding the extra `)` properly closes the `app.put` call before the statement-ending semicolon
+- This resolves the "missing ) after argument list" error by balancing all parentheses
+
+## Additional Context
+- Your ServiceWorker (`src/sw.js`) is already correct - it only intercepts `/api/` requests (not `/photos/`), so photo requests bypass the SW entirely
+- Photo middleware in `server.js` is correct: 
+  - `app.use('/photos', express.static(PHOTOS_DIR));` serves existing photos
+  - `app.use('/photos', (req, res) => res.status(404).send('Not found'));` returns 404 for missing photos
+- The `DATA_DIR` configuration properly uses `/private/data` in production for persistence (respecting your `DATA_DIR` env var)
+- No other changes are needed - this single parenthesis fix resolves the syntax error preventing healthy deployment
+
+## Verification Steps (Post-Fix)
+1. Save the change to `server.js`
+2. Run `npm run build` to regenerate `dist/` (including the fixed `dist/sw.js`)
+3. Deploy the updated `dist/` folder to your GoDaddy `/app/public/` directory
+4. Restart your application
+5. Photos will now load correctly without ServiceWorker interception errors
+6. Newly uploaded photos will persist across deploys (stored in `/private/data/photos/`)
+7. API requests retain JSON `{error: 'Offline'}` fallback for offline handling
+
+Note: Photos uploaded before this fix were stored in ephemeral storage (`/app/data/photos/`) and were lost on deploys. Only photos uploaded after applying this fix will persist correctly. Re-upload any important photos that were lost.
