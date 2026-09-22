@@ -332,8 +332,8 @@ app.post('/api/customers', requireEditor, asyncHandler(async (req, res) => {
        return res.status(409).json({ 
          error: 'Customer with this email or phone already exists', 
          id: existing.id 
-       });
-     }
+});
+);
      
      const r = await db.prepare(`INSERT INTO customers (name, address, city, postal_code, phone, email) VALUES (?, ?, ?, ?, ?, ?)`).run(name, address, city, postal_code, phone, email);
      res.json({ id: r.lastInsertRowid, name, phone });

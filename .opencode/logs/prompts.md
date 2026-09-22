@@ -673,3 +673,18 @@ Open server.js and look at the code around line 357. Find the function call that
 ## 22/09/2026, 18:04:33
 
 go
+## 22/09/2026, 18:20:33
+
+continue
+## 22/09/2026, 18:20:47
+
+continue
+## 22/09/2026, 18:21:03
+
+continue
+## 22/09/2026, 18:24:52
+
+continue
+## 22/09/2026, 18:27:27
+
+Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.
