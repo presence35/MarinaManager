@@ -469,3 +469,199 @@ we've been using ephemeral all this time? How's the database stille xist then?  
 so our pics are gone? Ugh.
 
 i set the env.  go
+## 22/09/2026, 17:43:46
+
+This version did not become healthy, so production was rolled back to the previous version (e2afa36273956b33152c01045142d2cf6854706a) and is serving that. The site is NOT running the commit you just published. Fix the cause below, then publish again.[INFO] 2026-09-22 10:59:18 - Node version: v22.23.2
+[INFO] 2026-09-22 10:59:18 - No archive argument - using current
+[INFO] 2026-09-22 10:59:18 - Starting application deployment process
+[INFO] 2026-09-22 10:59:18 - is_paas_flow: source=supervisor paas=true
+[INFO] 2026-09-22 10:59:18 - PaaS flow detected - delegating to paas-run.sh
+[INFO] 2026-09-22 10:59:18 - Skipping cleanup (cleanAppDirBeforeExtract: false)
+[INFO] 2026-09-22 10:59:18 - Archive path: /dist/current
+[INFO] 2026-09-22 10:59:18 - Archive size: 59.2M
+[INFO] 2026-09-22 10:59:18 - Extracting archive to: /app
+[INFO] 2026-09-22 10:59:23 - Archive extracted successfully, extractDurationMs=0
+[INFO] 2026-09-22 10:59:23 - Changed to app directory: /app
+{"event":"paas.run.config-loaded","level":"info","timestamp":"2026-09-22T10:59:23Z","data":{"hasAiroConfig":true,"serveCommand":"NODE_ENV=production npm start","buildCommand":"NODE_ENV=production npm run build","packageManager":""}}
+[INFO] 2026-09-22 10:59:23 - PaaS: node_modules and build output present from preview - serving directly
+{"event":"paas.run.start-command-resolved","level":"info","timestamp":"2026-09-22T10:59:23Z","data":{"source":"airo-config","command":"NODE_ENV=production npm start"}}
+[INFO] 2026-09-22 10:59:23 - PaaS: starting via custom serve command from .airo/config.json: NODE_ENV=production npm start
+{"event":"paas.run.starting","level":"info","timestamp":"2026-09-22T10:59:23Z","data":{"source":"airo-config","command":"NODE_ENV=production npm start","packageManager":""}}
+
+
+> marina-repair-app@1.1.10 start
+> node server.js
+  Using MySQL database: 10.204.129.131
+  Daily backup created: /app/backup/2026-09-22.sql
+⚓ Marina Manager
+   Local:   http://localhost:20011
+   Network: http://100.117.237.248:20011
+   Default admin PIN: 0000
+[INFO] 2026-09-22 13:59:20 - Node version: v22.23.2
+[INFO] 2026-09-22 13:59:20 - No archive argument - using current
+[INFO] 2026-09-22 13:59:20 - Starting application deployment process
+[INFO] 2026-09-22 13:59:20 - is_paas_flow: source=supervisor paas=true
+[INFO] 2026-09-22 13:59:20 - PaaS flow detected - delegating to paas-run.sh
+[INFO] 2026-09-22 13:59:20 - Skipping cleanup (cleanAppDirBeforeExtract: false)
+[INFO] 2026-09-22 13:59:20 - Archive path: /dist/current
+[INFO] 2026-09-22 13:59:20 - Archive size: 59.2M
+[INFO] 2026-09-22 13:59:20 - Extracting archive to: /app
+[INFO] 2026-09-22 13:59:25 - Archive extracted successfully, extractDurationMs=0
+[INFO] 2026-09-22 13:59:25 - Changed to app directory: /app
+{"event":"paas.run.config-loaded","level":"info","timestamp":"2026-09-22T13:59:25Z","data":{"hasAiroConfig":true,"serveCommand":"NODE_ENV=production npm start","buildCommand":"NODE_ENV=production npm run build","packageManager":""}}
+[INFO] 2026-09-22 13:59:25 - PaaS: node_modules and build output present from preview - serving directly
+{"event":"paas.run.start-command-resolved","level":"info","timestamp":"2026-09-22T13:59:25Z","data":{"source":"airo-config","command":"NODE_ENV=production npm start"}}
+[INFO] 2026-09-22 13:59:25 - PaaS: starting via custom serve command from .airo/config.json: NODE_ENV=production npm start
+{"event":"paas.run.starting","level":"info","timestamp":"2026-09-22T13:59:25Z","data":{"source":"airo-config","command":"NODE_ENV=production npm start","packageManager":""}}
+
+
+> marina-repair-app@1.1.10 start
+> node server.js
+  Using MySQL database: 10.204.129.131
+  Daily backup already exists: /app/backup/2026-09-22.sql
+⚓ Marina Manager
+   Local:   http://localhost:20011
+   Network: http://100.117.237.248:20011
+   Default admin PIN: 0000
+[INFO] 2026-09-22 14:00:27 - Node version: v22.23.2
+[INFO] 2026-09-22 14:00:27 - No archive argument - using current
+[INFO] 2026-09-22 14:00:27 - Starting application deployment process
+[INFO] 2026-09-22 14:00:27 - is_paas_flow: source=supervisor paas=true
+[INFO] 2026-09-22 14:00:27 - PaaS flow detected - delegating to paas-run.sh
+[INFO] 2026-09-22 14:00:27 - Skipping cleanup (cleanAppDirBeforeExtract: false)
+[INFO] 2026-09-22 14:00:27 - Archive path: /dist/current
+[INFO] 2026-09-22 14:00:27 - Archive size: 1.1M
+[INFO] 2026-09-22 14:00:27 - Extracting archive to: /app
+[INFO] 2026-09-22 14:00:27 - Archive extracted successfully, extractDurationMs=0
+[INFO] 2026-09-22 14:00:27 - Changed to app directory: /app
+{"event":"paas.run.config-loaded","level":"info","timestamp":"2026-09-22T14:00:27Z","data":{"hasAiroConfig":true,"serveCommand":"npm start","buildCommand":"npm run build","packageManager":""}}
+[INFO] 2026-09-22 14:00:27 - PaaS: node_modules and build output present from preview - serving directly
+{"event":"paas.run.start-command-resolved","level":"info","timestamp":"2026-09-22T14:00:27Z","data":{"source":"airo-config","command":"npm start"}}
+[INFO] 2026-09-22 14:00:27 - PaaS: starting via custom serve command from .airo/config.json: npm start
+{"event":"paas.run.starting","level":"info","timestamp":"2026-09-22T14:00:27Z","data":{"source":"airo-config","command":"npm start","packageManager":""}}
+
+
+> marina-repair-app@1.1.10 start
+> node server.js
+  Using MySQL database: 10.204.129.131
+  Daily backup already exists: /app/backup/2026-09-22.sql
+⚓ Marina Manager
+   Local:   http://localhost:20011
+   Network: http://100.117.237.248:20011
+   Default admin PIN: 0000
+[INFO] 2026-09-22 14:19:47 - Node version: v22.23.2
+[INFO] 2026-09-22 14:19:47 - No archive argument - using current
+[INFO] 2026-09-22 14:19:47 - Starting application deployment process
+[INFO] 2026-09-22 14:19:47 - is_paas_flow: source=supervisor paas=true
+[INFO] 2026-09-22 14:19:47 - PaaS flow detected - delegating to paas-run.sh
+[INFO] 2026-09-22 14:19:47 - Skipping cleanup (cleanAppDirBeforeExtract: false)
+[INFO] 2026-09-22 14:19:47 - Archive path: /dist/current
+[INFO] 2026-09-22 14:19:47 - Archive size: 59.2M
+[INFO] 2026-09-22 14:19:47 - Extracting archive to: /app
+[INFO] 2026-09-22 14:19:52 - Archive extracted successfully, extractDurationMs=0
+[INFO] 2026-09-22 14:19:52 - Changed to app directory: /app
+{"event":"paas.run.config-loaded","level":"info","timestamp":"2026-09-22T14:19:52Z","data":{"hasAiroConfig":true,"serveCommand":"npm start","buildCommand":"npm run build","packageManager":""}}
+[INFO] 2026-09-22 14:19:52 - PaaS: node_modules and build output present from preview - serving directly
+{"event":"paas.run.start-command-resolved","level":"info","timestamp":"2026-09-22T14:19:52Z","data":{"source":"airo-config","command":"npm start"}}
+[INFO] 2026-09-22 14:19:52 - PaaS: starting via custom serve command from .airo/config.json: npm start
+{"event":"paas.run.starting","level":"info","timestamp":"2026-09-22T14:19:52Z","data":{"source":"airo-config","command":"npm start","packageManager":""}}
+
+
+> marina-repair-app@1.1.10 start
+> node server.js
+  Using MySQL database: 10.204.129.131
+  Daily backup already exists: /app/backup/2026-09-22.sql
+⚓ Marina Manager
+   Local:   http://localhost:20011
+   Network: http://100.117.237.248:20011
+   Default admin PIN: 0000
+[INFO] 2026-09-22 14:20:27 - Node version: v22.23.2
+[INFO] 2026-09-22 14:20:27 - No archive argument - using current
+[INFO] 2026-09-22 14:20:27 - Starting application deployment process
+[INFO] 2026-09-22 14:20:27 - is_paas_flow: source=supervisor paas=true
+[INFO] 2026-09-22 14:20:27 - PaaS flow detected - delegating to paas-run.sh
+[INFO] 2026-09-22 14:20:27 - Skipping cleanup (cleanAppDirBeforeExtract: false)
+[INFO] 2026-09-22 14:20:27 - Archive path: /dist/current
+[INFO] 2026-09-22 14:20:27 - Archive size: 59.2M
+[INFO] 2026-09-22 14:20:27 - Extracting archive to: /app
+[INFO] 2026-09-22 14:20:32 - Archive extracted successfully, extractDurationMs=0
+[INFO] 2026-09-22 14:20:32 - Changed to app directory: /app
+{"event":"paas.run.config-loaded","level":"info","timestamp":"2026-09-22T14:20:32Z","data":{"hasAiroConfig":true,"serveCommand":"npm start","buildCommand":"npm run build","packageManager":""}}
+[INFO] 2026-09-22 14:20:32 - PaaS: node_modules and build output present from preview - serving directly
+{"event":"paas.run.start-command-resolved","level":"info","timestamp":"2026-09-22T14:20:33Z","data":{"source":"airo-config","command":"npm start"}}
+[INFO] 2026-09-22 14:20:33 - PaaS: starting via custom serve command from .airo/config.json: npm start
+{"event":"paas.run.starting","level":"info","timestamp":"2026-09-22T14:20:33Z","data":{"source":"airo-config","command":"npm start","packageManager":""}}
+
+
+> marina-repair-app@1.1.10 start
+> node server.js
+  Using MySQL database: 10.204.129.131
+  Daily backup already exists: /app/backup/2026-09-22.sql
+⚓ Marina Manager
+   Local:   http://localhost:20011
+   Network: http://100.117.237.248:20011
+   Default admin PIN: 0000
+[INFO] 2026-09-22 14:33:11 - Node version: v22.23.2
+[INFO] 2026-09-22 14:33:11 - No archive argument - using current
+[INFO] 2026-09-22 14:33:11 - Starting application deployment process
+[INFO] 2026-09-22 14:33:11 - is_paas_flow: source=supervisor paas=true
+[INFO] 2026-09-22 14:33:11 - PaaS flow detected - delegating to paas-run.sh
+[INFO] 2026-09-22 14:33:11 - Skipping cleanup (cleanAppDirBeforeExtract: false)
+[INFO] 2026-09-22 14:33:11 - Archive path: /dist/current
+[INFO] 2026-09-22 14:33:11 - Archive size: 59.2M
+[INFO] 2026-09-22 14:33:11 - Extracting archive to: /app
+[INFO] 2026-09-22 14:33:17 - Archive extracted successfully, extractDurationMs=0
+[INFO] 2026-09-22 14:33:17 - Changed to app directory: /app
+{"event":"paas.run.config-loaded","level":"info","timestamp":"2026-09-22T14:33:17Z","data":{"hasAiroConfig":true,"serveCommand":"npm start","buildCommand":"npm run build","packageManager":""}}
+[INFO] 2026-09-22 14:33:17 - PaaS: node_modules and build output present from preview - serving directly
+{"event":"paas.run.start-command-resolved","level":"info","timestamp":"2026-09-22T14:33:17Z","data":{"source":"airo-config","command":"npm start"}}
+[INFO] 2026-09-22 14:33:17 - PaaS: starting via custom serve command from .airo/config.json: npm start
+{"event":"paas.run.starting","level":"info","timestamp":"2026-09-22T14:33:17Z","data":{"source":"airo-config","command":"npm start","packageManager":""}}
+
+
+> marina-repair-app@1.1.10 start
+> node server.js
+  Using MySQL database: 10.204.129.131
+  Daily backup already exists: /app/backup/2026-09-22.sql
+⚓ Marina Manager
+   Local:   http://localhost:20011
+   Network: http://100.117.237.248:20011
+   Default admin PIN: 0000
+[INFO] 2026-09-22 14:39:54 - Node version: v22.23.2
+[INFO] 2026-09-22 14:39:54 - No archive argument - using current
+[INFO] 2026-09-22 14:39:54 - Starting application deployment process
+[INFO] 2026-09-22 14:39:54 - is_paas_flow: source=supervisor paas=true
+[INFO] 2026-09-22 14:39:54 - PaaS flow detected - delegating to paas-run.sh
+[INFO] 2026-09-22 14:39:54 - Skipping cleanup (cleanAppDirBeforeExtract: false)
+[INFO] 2026-09-22 14:39:54 - Archive path: /dist/current
+[INFO] 2026-09-22 14:39:54 - Archive size: 59.2M
+[INFO] 2026-09-22 14:39:54 - Extracting archive to: /app
+[INFO] 2026-09-22 14:39:59 - Archive extracted successfully, extractDurationMs=0
+[INFO] 2026-09-22 14:39:59 - Changed to app directory: /app
+{"event":"paas.run.config-loaded","level":"info","timestamp":"2026-09-22T14:39:59Z","data":{"hasAiroConfig":true,"serveCommand":"NODE_ENV=production npm start","buildCommand":"NODE_ENV=production npm run build","packageManager":""}}
+[INFO] 2026-09-22 14:39:59 - PaaS: node_modules and build output present from preview - serving directly
+{"event":"paas.run.start-command-resolved","level":"info","timestamp":"2026-09-22T14:39:59Z","data":{"source":"airo-config","command":"NODE_ENV=production npm start"}}
+[INFO] 2026-09-22 14:39:59 - PaaS: starting via custom serve command from .airo/config.json: NODE_ENV=production npm start
+{"event":"paas.run.starting","level":"info","timestamp":"2026-09-22T14:39:59Z","data":{"source":"airo-config","command":"NODE_ENV=production npm start","packageManager":""}}
+
+
+> marina-repair-app@1.1.10 start
+> node server.js
+/app/server.js:357
+});
+ ^
+
+
+SyntaxError: missing ) after argument list
+    at wrapSafe (node:internal/modules/cjs/loader:1713:18)
+    at Module._compile (node:internal/modules/cjs/loader:1755:20)
+    at Object..js (node:internal/modules/cjs/loader:1913:10)
+    at Module.load (node:internal/modules/cjs/loader:1505:32)
+    at Function._load (node:internal/modules/cjs/loader:1309:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49
+Node.js v22.23.2
+## 22/09/2026, 17:46:32
+
+go

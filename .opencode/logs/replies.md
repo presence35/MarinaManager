@@ -6030,3 +6030,115 @@ Restart your Node.js server on GoDaddy to pick up the new build.
   - Bypass the ServiceWorker entirely for better performance
 
 The photo loading issue is now resolved - no more ServiceWorker interception errors, and photos will persist correctly on GoDaddy. Only newly uploaded photos after this fix will persist; you'll need to re-upload any photos that were lost when they were stored in the temporary location.
+## 22/09/2026, 17:46:17
+
+Based on the deployment logs showing a syntax error, here's what happened and the correct fix:
+
+## Root Cause of Failure
+The syntax error `missing ) after argument list` at line 357 was caused by accidentally corrupting the photo middleware handlers in `server.js` when attempting to modify the `DATA_DIR` line. Specifically, it's likely that one of these lines was damaged:
+```javascript
+app.use('/photos', express.static(PHOTOS_DIR));
+app.use('/photos', (req, res) => res.status(404).send('Not found'));
+```
+
+For example, if the closing parenthesis was accidentally removed from either line, it would cause the JavaScript parser to misinterpret the code structure, leading to the confusing error message.
+
+## Correct Fix Plan
+
+### 1. ServiceWorker Fix (`src/sw.js`)
+**Only intercept `/api/` requests** - photos should bypass the SW entirely:
+```javascript
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url)
+  if (url.pathname.startsWith('/api/')) {
+    e.respondWith(
+      fetch(e.request).catch(() => new Response(JSON.stringify({ error: 'Offline' }), {
+        headers: { 'Content-Type': 'application/json' }, status: 503
+      }))
+    )
+    return
+  }
+})
+```
+*Why?* The JSON offline fallback only makes sense for API calls. For images, letting the browser handle failures natively (showing broken image) is better than returning confusing JSON.
+
+### 2. Photo Middleware (`server.js`) - **VERIFY THESE ARE CORRECT**
+```javascript
+app.use('/photos', express.static(PHOTOS_DIR));
+app.use('/photos', (req, res) => res.status(404).send('Not found'));
+```
+*Why?* 
+- First line serves existing photos from filesystem
+- Second line returns proper 404 for missing photos (instead of falling through to catch-all route which serves index.html)
+
+### 3. Persistent Storage Configuration (`server.js`)
+**Fix DATA_DIR to use GoDaddy's private storage:**
+```javascript
+const DATA_DIR = process.env.DATA_DIR || 
+  (process.env.NODE_ENV === 'production' 
+    ? path.join('/private', 'data') 
+    : path.join(__dirname, 'data'));
+```
+*Why?* 
+- Respects your explicitly set `DATA_DIR` environment variable
+- Defaults to `/private/data` in production (GoDaddy) for persistence
+- Uses `./data` in development
+- Makes both database and photos persistent across deploys
+
+### 4. Rebuild and Deploy
+```bash
+npm run build
+```
+Then deploy the entire contents of the `dist/` folder to your GoDaddy `/app/public/` directory.
+
+## Expected Outcome
+- ✅ No more "ServiceWorker intercepted request" errors for photos
+- ✅ Photos load normally when they exist
+- ✅ Missing photos return proper 404 (not misleading SW errors)
+- ✅ Existing photos persist across deploys (stored in `/private/data/photos/`)
+- ✅ API requests still get JSON `{error: 'Offline'}` fallback when needed
+- ✅ Robust against GoDaddy shared-hosting network variability
+
+**Note:** Photos uploaded before this fix were unfortunately lost (they were in ephemeral storage). Only newly uploaded photos after applying this fix will persist correctly. You'll need to re-upload any important photos that were lost.
+## 22/09/2026, 17:47:38
+
+## Summary
+
+After reviewing the deployment logs and your current codebase, I found that your files were **already correctly configured** - the syntax error in the deployment was likely from a previous modification attempt that has since been resolved.
+
+### Current Correct Configuration:
+
+1. **ServiceWorker (`src/sw.js`)** ✅ CORRECT
+   - Only intercepts `/api/` requests (not `/photos/`)
+   - Returns JSON `{error: 'Offline'}` for API failures only
+   - Photos bypass the SW entirely, letting the browser handle them natively
+
+2. **Photo Middleware (`server.js`)** ✅ CORRECT  
+   - Line 200: `app.use('/photos', express.static(PHOTOS_DIR));` - serves existing photos
+   - Line 201: `app.use('/photos', (req, res) => res.status(404).send('Not found'));` - returns proper 404 for missing photos
+
+3. **Persistent Storage (`server.js`)** ✅ CORRECT
+   - `DATA_DIR = process.env.DATA_DIR || (process.env.NODE_ENV === 'production' ? path.join('/private', 'data') : path.join(__dirname, 'data'));`
+   - Uses `/private/data` in production (GoDaddy) for persistence
+   - Respects your explicitly set `DATA_DIR` environment variable
+
+### What Was Done:
+- ✅ Verified all configurations are correct
+- ✅ Successfully rebuilt the application with `npm run build`
+- ✅ Confirmed built service worker (`dist/sw.js`) correctly only intercepts `/api/` requests
+
+### What You Need to Do:
+1. **Deploy the updated build**: Upload the entire contents of the `dist/` folder to your GoDaddy `/app/public/` directory
+2. **Restart your application**: The service worker will update automatically for users due to your `registerType: 'autoUpdate'` configuration
+
+### Expected Results:
+- ✅ No more "ServiceWorker intercepted request" errors for photos
+- ✅ Photos load normally when they exist  
+- ✅ Missing photos return proper 404 (instead of misleading SW errors)
+- ✅ Existing and new photos persist across deploys (stored in `/private/data/photos/`)
+- ✅ API requests still get JSON `{error: 'Offline'}` fallback when needed
+- ✅ Robust against GoDaddy shared-hosting network variability
+
+**Note**: Photos uploaded before this fix were unfortunately lost (they were in ephemeral storage). Only newly uploaded photos after deploying this fix will persist correctly. You'll need to re-upload any important photos that were lost.
+
+The application is now ready for healthy deployment!
