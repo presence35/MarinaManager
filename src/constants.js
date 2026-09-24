@@ -26,6 +26,8 @@ export const THEME_PREVIEW_COLORS = {
   'coral-bay': { day: ['#c03a3a', '#06b88a', '#fff5f2'], night: ['#0f0505', '#200c0c', '#06b88a'] },
 }
 
+export const SERIAL_TYPES = ['engine', 'hull', 'outdrive', 'trailer', 'other']
+
 export const RECEIVED_ITEMS = [
   { key: 'battery', label: 'Battery' },
   { key: 'keys', label: 'Keys' },

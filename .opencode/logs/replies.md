@@ -6374,3 +6374,422 @@ Let me get the exact characters of line 356
 ## 22/09/2026, 18:46:54
 
 The server.js file has a syntax error on line 357 where it shows `};` but should show `});`. This is causing the "Unexpected token ')' " error. The fix is to change line 357 from `};` to `});` to properly close the function call.
+## 24/09/2026, 22:12:08
+
+I'll explore the codebase to understand the current architecture and then create a comprehensive plan for these issues and features.
+
+
+## 24/09/2026, 22:13:22
+
+Now I have a comprehensive understanding of the codebase. Let me create a plan for all the requested features and fixes.
+
+## Analysis Summary
+
+**Current Architecture:**
+- React frontend with Vite, Express backend with SQLite/MySQL
+- Service cards track boat work orders through statuses (intake → invoiced → archived)
+- Invoice tab exists in `CardDetailScreen.jsx` (lines 1430-1683)
+- Boat assignments exist in Admin screen (`boat_assignments` table)
+- Boats table has: name, motor_type, model, licence, trailer_licence, rate_type, length_ft
+
+**Issues Identified:**
+1. **Serial numbers** - Boats table missing serial number fields (engine, hull, outdrive, trailer, etc.)
+2. **Blank page on line items** - No separate line item detail screen exists; items are inline in InvoiceTab
+3. **Undo "paid"** - Invoice status only goes forward (draft → issued → paid), no backward transition
+4. **State reset on navigation** - InvoiceTab re-fetches on mount, losing local state
+5. **Boat assignment to employee** - Admin UI exists but not exposed to mechanics/boat screens
+
+---
+
+## Proposed Plan
+
+### Phase 1: Database Schema Updates
+1. **Add serial number columns to `boats` table:**
+   - `engine_serial` (TEXT)
+   - `hull_serial` (TEXT) 
+   - `outdrive_serial` (TEXT)
+   - `trailer_serial` (TEXT)
+   - `other_serial` (TEXT) — generic catch-all
+
+2. **Add `invoice_status` transition support** - Allow backward transitions (paid → issued → draft)
+
+### Phase 2: Serial Number Feature (Boat Edit Screen)
+- Add serial number fields to BoatsScreen edit form
+- Display serial numbers in CardDetailScreen InfoTab (boat section)
+- Add to boat creation API
+
+### Phase 3: Invoice Fixes
+**3a. Undo "paid" functionality:**
+- Add "Mark as Draft" / "Mark as Issued" buttons when status is 'paid' (admin/office only)
+- Update server to allow status transitions in both directions
+
+**3b. State persistence fix:**
+- Move invoice state (items, status, number, tax) to a shared context or lift to CardDetailScreen
+- Or persist to localStorage keyed by card_id
+- Simplest: Keep initialRef but don't reset on unmount - cache in parent
+
+### Phase 4: Boat Assignment to Employee
+- Add assignment UI to BoatsScreen (admin/office)
+- Show assigned mechanic on CardDetailScreen header
+- Filter cards by assignment in CardsScreen (already partially done)
+
+### Phase 5: Line Items - Clarification Needed
+The "blank page when clicking line items" - currently items are inline editable in InvoiceTab. Do you want:
+- **A)** A separate detail screen when tapping a line item (for adding notes, photos, serial numbers per item)
+- **B)** The current inline editing is fine, the "blank page" was a bug?
+
+---
+
+## Clarifying Questions
+
+## 24/09/2026, 22:14:56
+
+Based on your answers, here's the implementation plan:
+
+---
+
+## Complete Implementation Plan
+
+### 1. Database Schema (server.js + schema.sql)
+- **Add 4 serial columns to `boats` table:** `engine_serial`, `hull_serial`, `outdrive_serial`, `trailer_serial`
+- **Allow invoice status transitions both ways** (paid → issued → draft) in PUT `/cards/:id/invoice`
+
+### 2. BoatsScreen.jsx - Serial Number Fields
+- Add 4 serial number inputs to edit form (lines 70-108)
+- Include in save payload (line 61)
+- Display in boat list view (line 139)
+
+### 3. CardDetailScreen.jsx - Invoice Fixes
+**3a. Undo Paid (lines 1567-1610):**
+- Show "Mark as Issued" + "Mark as Draft" buttons when `invoiceStatus === 'paid'` and `isEditable`
+- Update `saveInvoice()` to allow backward transitions
+
+**3b. State Persistence Fix:**
+- Move invoice state (items, status, number, tax) from `InvoiceTab` → `CardDetailScreen` parent
+- Pass as props to `InvoiceTab` so state survives tab switches
+- Remove local `useState` + `useEffect` fetch from InvoiceTab
+
+### 4. Boat Assignment to Employee
+**4a. BoatsScreen.jsx (admin/office):**
+- Add "Assign Mechanic" button next to edit/delete (line 141-145)
+- Modal to select employee → POST `/assignments`
+
+**4b. CardDetailScreen.jsx header:**
+- Show assigned mechanic initials/name under boat name (line 1834-1837)
+
+### 5. Line Item "Blank Page" Bug
+- Currently no click handler on line items in InvoiceTab (lines 1624-1658)
+- The inline editing works; ensure no stray `onClick` causing navigation
+- Add `cursor: 'default'` or `pointer` for editable fields only
+
+---
+
+## File Changes Order
+
+1. `db/schema.sql` - Add serial columns
+2. `server.js` - ALTER TABLE + allow bidirectional invoice status
+3. `src/screens/BoatsScreen.jsx` - Serial fields in edit form
+4. `src/screens/CardDetailScreen.jsx` - 
+   - Lift invoice state to parent
+   - Add undo paid buttons
+   - Show assigned mechanic
+5. `src/screens/BoatsScreen.jsx` - Add assignment UI (admin/office)
+6. `src/screens/CardsScreen.jsx` - Already filters by assignment
+
+---
+
+## Key Technical Decisions
+
+| Decision | Approach |
+|----------|----------|
+| Invoice state persistence | Lift state to `CardDetailScreen` (parent of tabs) |
+| Serial number fields | 4 fixed columns (engine, hull, outdrive, trailer) |
+| Undo paid permissions | Same as edit: admin + office |
+| Boat assignment UI | Modal in BoatsScreen (admin/office only) |
+
+---
+
+Ready to implement. Should I start with the database schema and server changes?
+## 24/09/2026, 22:15:58
+
+You're absolutely right. Let me propose a normalized design.
+
+## 24/09/2026, 22:16:38
+
+---
+
+## Revised Plan: Normalized Serial Numbers
+
+### Database Schema
+Add new table `boat_serials` (following `received_items` pattern):
+
+```sql
+CREATE TABLE IF NOT EXISTS boat_serials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  boat_id INTEGER NOT NULL,
+  type TEXT NOT NULL,           -- 'engine', 'hull', 'outdrive', 'trailer', 'other'
+  serial_number TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (boat_id) REFERENCES boats(id)
+);
+CREATE INDEX idx_boat_serials_boat ON boat_serials(boat_id);
+```
+
+### API Changes (server.js)
+
+1. **GET `/api/boats`** - Include serials in response:
+   ```js
+   // After fetching boats, for each boat:
+   boat.serials = await db.prepare('SELECT * FROM boat_serials WHERE boat_id = ?').all(boat.id);
+   ```
+
+2. **GET `/api/boats/:id`** - Include serials:
+   ```js
+   boat.serials = await db.prepare('SELECT * FROM boat_serials WHERE boat_id = ?').all(id);
+   ```
+
+3. **POST `/api/boats`** - Accept `serials` array in body, insert after boat creation
+
+4. **PUT `/api/boats/:id`** - Accept `serials` array, replace all (delete + insert)
+
+### Frontend Changes
+
+1. **BoatsScreen.jsx** - Edit form:
+   - Replace 4 fixed inputs with dynamic list of serial entries
+   - Each entry: Type (select), Serial Number (input), Notes (input)
+   - "+ Add Serial" button
+   - Send `serials: [...]` in save payload
+
+2. **CardDetailScreen.jsx** - InfoTab boat display:
+   - Show serials in boat section (collapsible list)
+
+3. **Boat assignment UI** - Already exists in AdminScreen, just needs exposure in BoatsScreen for admin/office
+
+---
+
+## Other Items (unchanged)
+
+| Item | Approach |
+|------|----------|
+| **Undo Paid** | Add "Mark as Issued"/"Mark as Draft" buttons in InvoiceTab when status=paid (admin/office) |
+| **State Persistence** | Lift invoice state to CardDetailScreen parent, pass as props to InvoiceTab |
+| **Line Item Blank Page** | Remove any stray click handlers; inline editing works |
+| **Boat Assignment to Employee** | Add "Assign" button in BoatsScreen (admin/office) → modal → POST `/assignments` |
+
+---
+
+## Clarifying Question
+
+
+## 24/09/2026, 22:17:10
+
+---
+
+## Final Implementation Plan
+
+### 1. Database (`db/schema.sql` + `server.js` ALTER TABLE)
+```sql
+CREATE TABLE IF NOT EXISTS boat_serials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  boat_id INTEGER NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('engine','hull','outdrive','trailer','other')),
+  serial_number TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (boat_id) REFERENCES boats(id)
+);
+CREATE INDEX idx_boat_serials_boat ON boat_serials(boat_id);
+```
+
+### 2. Server API (`server.js`)
+| Endpoint | Change |
+|----------|--------|
+| `GET /api/boats` | Attach `serials` array to each boat |
+| `GET /api/boats/:id` | Attach `serials` array |
+| `POST /api/boats` | Accept `serials: [{type, serial_number, notes}]` in body; insert after boat creation |
+| `PUT /api/boats/:id` | Accept `serials` array; `DELETE FROM boat_serials WHERE boat_id=?` then insert new |
+| `PUT /api/cards/:id/invoice` | Allow status transitions: `paid` → `issued` → `draft` (bidirectional) |
+
+### 3. BoatsScreen.jsx
+- **Edit form**: Dynamic serials list (Type select + Serial input + Notes input + Delete)
+- **Save**: Include `serials` array in PUT body
+- **List view**: Show serial count badge on each boat row
+- **Assignment**: Add "Assign Mechanic" button (admin/office) → modal with employee select → POST `/assignments`
+
+### 4. CardDetailScreen.jsx
+- **Invoice state persistence**: Move `items`, `invoiceStatus`, `invoiceNumber`, `taxRate` state from `InvoiceTab` → `CardDetailScreen` (parent), pass as props + callbacks
+- **Undo Paid**: In `InvoiceTab`, when `invoiceStatus === 'paid'` and `isEditable`, show "Mark as Issued" / "Mark as Draft" buttons
+- **Assigned mechanic**: Display in header (fetch from `boat_assignments` join or pass via params)
+- **Serials display**: In InfoTab boat section, show collapsible list of serials
+
+### 5. CardsScreen.jsx
+- Already filters by assignment (`assignedBoatIds` Set) — no changes needed
+
+### File Change Order
+1. `db/schema.sql` — add `boat_serials` table
+2. `server.js` — ALTER TABLE + API endpoints for serials + bidirectional invoice status
+3. `src/screens/BoatsScreen.jsx` — serials edit form + assignment button
+4. `src/screens/CardDetailScreen.jsx` — lift invoice state + undo buttons + serials display + assigned mechanic
+5. Test all flows
+
+---
+
+Ready to implement when you give the go-ahead.
+## 24/09/2026, 22:18:03
+
+Let me investigate a few things that determine whether the plan is truly elegant — the invoice blank page root cause, routing/permissions, and the product autocomplete.
+## 24/09/2026, 22:19:29
+
+I found the actual root causes, which makes the plan much more elegant. Two of the requested "features" don't need new state or new screens at all — they're bugs with surgical fixes.
+
+## Diagnosed Root Causes
+
+**1. "Blank line items" — not a missing screen.**
+Auto-added invoice items (from completing Service/Cleaning work, or "Add Completed to Invoice") are stored with `description` but `product: null`. In editable mode, `InvoiceTab` renders only `<ProductAutocomplete value={null}>`, whose `input` state initializes to `''` and only fills from `value` (`ProductAutocomplete.jsx:7,15-23`). So existing descriptions render as empty "Search or add product..." boxes — the row looks blank. Tapping a row has no handler, so there's no navigation.
+
+**2. "Paid/Issued resets on navigate" — stale closure, not missing persistence.**
+`onClick={() => { setInvoiceStatus('issued'); saveInvoice() }}` (`CardDetailScreen.jsx:1603-1608`). `setInvoiceStatus` is async; `saveInvoice()` still reads the *old* `invoiceStatus` and PUTs `'draft'`. The change was never persisted, so refetch shows draft. Lifting state to the parent would mask this — the correct fix is to pass the status explicitly.
+
+**3. Serial numbers — normalizing is right.** A `boat_serials` child table (one row per serial, supports twin engines) instead of columns on `boats`.
+
+**4. Boat assignment already exists** — table, `/api/assignments`, Admin UI, and mechanic filtering in `CardsScreen`. No new system needed.
+
+---
+
+## Elegant Plan
+
+### 1. `db/schema.sql` — add normalized child table
+```sql
+CREATE TABLE IF NOT EXISTS boat_serials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  boat_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  serial_number TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (boat_id) REFERENCES boats(id)
+);
+CREATE INDEX IF NOT EXISTS idx_boat_serials_boat ON boat_serials(boat_id);
+```
+(No `CHECK` enum — MySQL/SQLite type syntax differs; validate in the API instead so it's one authoritative point.)
+
+### 2. `server.js`
+- Bootstrap (mirroring the existing try/catch pattern): `CREATE TABLE IF NOT EXISTS boat_serials (... AUTO_INCREMENT ...)` — MySQL DDL; SQLite gets it from `schema.sql`.
+- `GET /api/boats` → attach serials: **one** `SELECT * FROM boat_serials`, group by `boat_id` (avoids N+1).
+- `GET /api/boats/:id` → attach `boat.serials`.
+- `POST /api/boats` → insert `serials[]` after boat creation.
+- `PUT /api/boats/:id` → only if `serials !== undefined`: `DELETE ... WHERE boat_id=?` then re-insert (guard prevents wiping serials on unrelated boat edits).
+- Validate `type` against a local `SERIAL_TYPES` array (`['engine','hull','outdrive','trailer','other']`).
+
+### 3. `src/constants.js`
+- Export `SERIAL_TYPES` for the UI dropdown (single list the UI reads from).
+
+### 4. `src/components/ProductAutocomplete.jsx` — fix blank line items
+- Accept optional `text` prop; seed `input` from it and keep in sync via effect. Minimal, reusable, fixes the invisible-description bug.
+
+### 5. `src/screens/CardDetailScreen.jsx`
+- **InvoiceTab**: pass `text={item.description}` to `ProductAutocomplete` (renders existing descriptions).
+- **Fix status persistence**: `const saveInvoice = async (overrideStatus) => { const status = overrideStatus ?? invoiceStatus; ... }`; buttons become `saveInvoice('issued')` / `saveInvoice('paid')`.
+- **Undo**: split permissions — `canEditInvoice = admin||office`; line items editable only when `draft && canEditInvoice`; status actions shown for `draft` (Mark Issued/Paid) **and** `paid`/`issued` (Undo → Issued, Undo → Draft).
+- **InfoTab**: read-only serial list in the Boat section.
+- **Header**: show assigned mechanic(s) (data already returned by `/api/assignments`).
+
+### 6. `src/screens/BoatsScreen.jsx`
+- Serial editor in the edit form (type dropdown + serial + notes, add/remove rows); include `serials` in save payload; load serials by fetching `/boats/:id` when opening edit.
+- Assignment control (admin/office) reusing `/api/assignments` — *location depends on your answer below*.
+
+### File change order
+1. db/schema.sql
+2. server.js
+3. src/constants.js
+4. src/components/ProductAutocomplete.jsx
+5. src/screens/BoatsScreen.jsx
+6. src/screens/CardDetailScreen.jsx
+
+---
+
+One tradeoff left before I finalize:
+## 24/09/2026, 22:22:05
+
+Both confirmed. Here's the final, minimal plan.
+
+## Final Plan
+
+### 1. `db/schema.sql`
+Add normalized child table (no `CHECK` enum — validated in API to avoid MySQL/SQLite syntax divergence):
+```sql
+CREATE TABLE IF NOT EXISTS boat_serials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  boat_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  serial_number TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (boat_id) REFERENCES boats(id)
+);
+CREATE INDEX IF NOT EXISTS idx_boat_serials_boat ON boat_serials(boat_id);
+```
+
+### 2. `server.js`
+- Bootstrap `CREATE TABLE IF NOT EXISTS boat_serials (...AUTO_INCREMENT...)` in the existing try/catch pattern (MySQL; SQLite gets it from schema.sql).
+- `GET /api/boats`: attach serials via **one** `SELECT * FROM boat_serials` grouped by `boat_id` (no N+1).
+- `GET /api/boats/:id`: attach `boat.serials`.
+- `POST /api/boats`: insert `serials[]` after creation.
+- `PUT /api/boats/:id`: only when `serials !== undefined` → `DELETE` + re-insert (guarded so assignment-only edits don't wipe serials).
+- Validate `type` against local `SERIAL_TYPES = ['engine','hull','outdrive','trailer','other']`.
+- Assignments: **no server changes** — endpoints already exist.
+
+### 3. `src/constants.js`
+Export `SERIAL_TYPES` (UI dropdown source).
+
+### 4. `src/components/ProductAutocomplete.jsx`
+Add optional `text` prop seeding `input` state (keeps in sync). Fixes the empty-line-item rendering.
+
+### 5. `src/screens/BoatsScreen.jsx`
+- Inline `SerialsEditor` in the edit form: type dropdown + serial + notes, add/remove rows.
+- Open edit via `GET /boats/:id` (gets serials); include `serials` in save payload; extend dirty-compare.
+- Per-row **Assign** control (admin/office): fetch `/api/assignments` once, group by `boat_id`; toggle POST/DELETE; show assignee chips. Eligible employees = active mechanic/cleaner.
+- Show serial count / assignees inline on each boat row.
+
+### 6. `src/screens/CardDetailScreen.jsx`
+- `InvoiceTab`: pass `text={item.description}` to `ProductAutocomplete`.
+- Fix stale-closure: `saveInvoice(overrideStatus)`; buttons call `saveInvoice('issued'|'paid')`.
+- Split permissions: `canEditInvoice = admin||office`; line items editable only `draft && canEditInvoice`; status actions for `draft` (Mark Issued/Paid) **and** `paid`/`issued` (Undo → Issued, Undo → Draft).
+- `InfoTab`: read-only serial list in the Boat section (this is where mechanics read them).
+
+**Deliberately excluded (zero unrequested scope):** no invoice-line-item detail screen, no card-header assignee, no serial fields on `boats`, no changes to AdminScreen/CardsScreen.
+
+Files in edit order:
+
+1. db/schema.sql
+2. server.js
+3. src/constants.js
+4. src/components/ProductAutocomplete.jsx
+5. src/screens/BoatsScreen.jsx
+6. src/screens/CardDetailScreen.jsx
+
+Ready to implement on your go-ahead.
+## 24/09/2026, 22:30:19
+
+Let me make typed invoice descriptions actually persist (so the now-visible text isn't a trap):
+## 24/09/2026, 22:31:09
+
+Done. All changes implemented and JSX/JS syntax-verified.
+
+**What changed**
+- `db/schema.sql` — normalized `boat_serials` child table + index (one row per serial, supports twin engines).
+- `server.js` — bootstraps `boat_serials` (MySQL DDL in the existing try/catch pattern); attaches serials to `GET /boats` (single grouped query, no N+1) and `GET /boats/:id`; handles `serials[]` on create/update (update only touches serials when the field is present); attaches `card.serials` to card detail; validates types.
+- `src/constants.js` — `SERIAL_TYPES` dropdown source.
+- `src/components/ProductAutocomplete.jsx:5` — optional `text` prop seeds existing descriptions; `onChange` now forwards the typed text as a 2nd arg.
+- `src/screens/BoatsScreen.jsx` — serial editor (type + serial + notes) in the edit form; per-row Assign control (admin/office) with an employee picker reusing `/api/assignments`; serial-count and assignee chips on rows.
+- `src/screens/CardDetailScreen.jsx` — InvoiceTab now persists status via `saveInvoice(overrideStatus)` (fixes the paid/issued reset); Undo to Issued/Draft for paid/issued; typed descriptions persist; serial list in the Boat section.
+
+**Notes**
+- Assignments already existed (table/endpoints/Admin UI/filtering) — I surfaced it on Boats rather than duplicating.
+- No build run (per your preference); I validated with `node --check server.js` and `@babel/parser` on the changed JSX.
+
+One thing to verify on your side: the MySQL table is created lazily at server start — the log line `Ensured boat_serials table` should appear on next boot.
+## 24/09/2026, 22:31:30
+
+I searched the whole repo and found no component, class, or identifier named `FlourishFooter`, `flourish`, or `scale` in the source (only CSS transform `scale(...)`, browser viewport `scale`, and the Settings version footer). So I can't reliably identify what to make taller.

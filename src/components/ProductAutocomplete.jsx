@@ -2,25 +2,30 @@ import { useState, useRef, useEffect, useContext } from 'react'
 import { ToastCtx } from '../contexts/ToastCtx'
 import { api } from '../api'
 
-export default function ProductAutocomplete({ value, onChange, placeholder, disabled, inputStyle }) {
+export default function ProductAutocomplete({ value, onChange, placeholder, disabled, inputStyle, text }) {
   const showToast = useContext(ToastCtx)
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(() => (value?.name || text || ''))
   const [results, setResults] = useState([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(value || null)
+  const seededTextRef = useRef(text || '')
   const ref = useRef(null)
   const debounceRef = useRef(null)
 
   useEffect(() => {
-    if (value && value.name && value.name !== selected?.name) {
+    if (value && value.name) {
       setSelected(value)
       setInput(value.name)
-    } else if (!value) {
-      setSelected(null)
-      if (!input) setInput('')
+      seededTextRef.current = value.name
+      return
     }
-  }, [value])
+    setSelected(null)
+    if (text !== undefined && text !== seededTextRef.current) {
+      seededTextRef.current = text
+      setInput(text || '')
+    }
+  }, [value, text])
 
   const search = async (term) => {
     if (!term || term.length < 1) {
@@ -42,7 +47,7 @@ export default function ProductAutocomplete({ value, onChange, placeholder, disa
   const handleInput = (val) => {
     setInput(val)
     setSelected(null)
-    if (onChange) onChange(null)
+    if (onChange) onChange(null, val)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => search(val), 300)
   }
@@ -51,7 +56,7 @@ export default function ProductAutocomplete({ value, onChange, placeholder, disa
     setInput(product.name)
     setSelected(product)
     setIsOpen(false)
-    if (onChange) onChange(product)
+    if (onChange) onChange(product, product.name)
   }
 
   const addNew = async () => {
@@ -63,7 +68,7 @@ export default function ProductAutocomplete({ value, onChange, placeholder, disa
       setInput(name)
       setSelected(product)
       setIsOpen(false)
-      if (onChange) onChange(product)
+      if (onChange) onChange(product, name)
       showToast(`Added "${name}"`)
     } catch (e) {
       showToast(e.message || 'Failed to add product')

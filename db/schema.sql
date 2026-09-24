@@ -42,6 +42,18 @@ CREATE TABLE IF NOT EXISTS boats (
    FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
 
+CREATE TABLE IF NOT EXISTS boat_serials (
+   id INTEGER PRIMARY KEY AUTOINCREMENT,
+   boat_id INTEGER NOT NULL,
+   type TEXT NOT NULL,
+   serial_number TEXT NOT NULL,
+   notes TEXT,
+   created_at TEXT DEFAULT (datetime('now')),
+   FOREIGN KEY (boat_id) REFERENCES boats(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_boat_serials_boat ON boat_serials(boat_id);
+
 CREATE TABLE IF NOT EXISTS service_cards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   boat_id INTEGER NOT NULL,

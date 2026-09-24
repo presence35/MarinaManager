@@ -267,8 +267,21 @@ function InfoTab({ card, reload, canEdit = true }) {
             </div>
           ) : null)}
         </div>
+        {(card.serials || []).length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 10 }}>
+            <div style={{ fontFamily: 'Barlow Condensed', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 6 }}>Serial Numbers</div>
+            {(card.serials || []).map(s => (
+              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0' }}>
+                <span style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text2)', textTransform: 'capitalize' }}>
+                  {s.type}{s.notes ? ` (${s.notes})` : ''}
+                </span>
+                <span style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text)' }}>{s.serial_number}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      </div>
+    </div>
 
       <div className="section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
         <span>Service Info</span>
@@ -1470,11 +1483,14 @@ function InvoiceTab({ card, reload }) {
     setItems([...items, { description: '', quantity: 1, unit_price: 0, total: 0, product: null }])
   }
 
-  const updateItem = (idx, field, value) => {
+  const updateItem = (idx, field, value, text) => {
     const updated = items.map((item, i) => {
       if (i !== idx) return item
-      if (field === 'product' && value) {
-        return { ...item, product: value, description: value.name, unit_price: value.unit_price || 0, total: (item.quantity || 1) * (value.unit_price || 0) }
+      if (field === 'product') {
+        if (value) {
+          return { ...item, product: value, description: value.name, unit_price: value.unit_price || 0, total: (item.quantity || 1) * (value.unit_price || 0) }
+        }
+        return { ...item, product: null, ...(text !== undefined ? { description: text } : {}) }
       }
       const newItem = { ...item, [field]: value }
       if (field === 'quantity' || field === 'unit_price') {
@@ -1489,15 +1505,17 @@ function InvoiceTab({ card, reload }) {
     setItems(items.filter((_, i) => i !== idx))
   }
 
-  const saveInvoice = async () => {
+  const saveInvoice = async (overrideStatus) => {
+    const status = overrideStatus ?? invoiceStatus
     try {
       await api('PUT', `/cards/${card.id}/invoice`, {
         invoice_number: invoiceNumber || null,
-        invoice_status: invoiceStatus,
+        invoice_status: status,
         tax_rate: taxRate,
         items: items.map(i => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price })),
       })
-      initialRef.current = { items, invoiceNumber, taxRate, invoiceStatus }
+      if (overrideStatus !== undefined) setInvoiceStatus(overrideStatus)
+      initialRef.current = { items, invoiceNumber, taxRate, invoiceStatus: status }
       setDirty(false)
       showToast('Invoice saved')
       reload()
@@ -1564,7 +1582,8 @@ function InvoiceTab({ card, reload }) {
     printWindow.document.close()
   }
 
-  const isEditable = invoiceStatus === 'draft' && (employee?.role === 'admin' || employee?.role === 'office')
+  const canEditInvoice = employee?.role === 'admin' || employee?.role === 'office'
+  const isEditable = invoiceStatus === 'draft' && canEditInvoice
   const subtotal = items.reduce((s, i) => s + (i.total || 0), 0)
   const tax = subtotal * (taxRate / 100)
   const grandTotal = subtotal + tax
@@ -1598,14 +1617,38 @@ function InvoiceTab({ card, reload }) {
             </div>
           </div>
 
-          {isEditable && invoiceStatus === 'draft' && (
-            <div style={{ marginBottom: 12, display: 'flex', gap: 6 }}>
-              <button className="btn btn-accent btn-sm" style={{ width: 'auto' }} onClick={() => { setInvoiceStatus('issued'); saveInvoice() }}>
-                Mark Issued
-              </button>
-              <button className="btn btn-outline btn-sm" style={{ width: 'auto' }} onClick={() => { setInvoiceStatus('paid'); saveInvoice() }}>
-                Mark Paid
-              </button>
+          {canEditInvoice && (
+            <div style={{ marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {invoiceStatus === 'draft' && (
+                <>
+                  <button className="btn btn-accent btn-sm" style={{ width: 'auto' }} onClick={() => saveInvoice('issued')}>
+                    Mark Issued
+                  </button>
+                  <button className="btn btn-outline btn-sm" style={{ width: 'auto' }} onClick={() => saveInvoice('paid')}>
+                    Mark Paid
+                  </button>
+                </>
+              )}
+              {invoiceStatus === 'issued' && (
+                <>
+                  <button className="btn btn-accent btn-sm" style={{ width: 'auto' }} onClick={() => saveInvoice('paid')}>
+                    Mark Paid
+                  </button>
+                  <button className="btn btn-outline btn-sm" style={{ width: 'auto' }} onClick={() => saveInvoice('draft')}>
+                    Undo to Draft
+                  </button>
+                </>
+              )}
+              {invoiceStatus === 'paid' && (
+                <>
+                  <button className="btn btn-outline btn-sm" style={{ width: 'auto' }} onClick={() => saveInvoice('issued')}>
+                    Undo to Issued
+                  </button>
+                  <button className="btn btn-outline btn-sm" style={{ width: 'auto' }} onClick={() => saveInvoice('draft')}>
+                    Undo to Draft
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1628,7 +1671,8 @@ function InvoiceTab({ card, reload }) {
                 {isEditable ? (
                   <ProductAutocomplete
                     value={item.product ? { id: item.product.id, name: item.product.name } : null}
-                    onChange={(product) => updateItem(i, 'product', product)}
+                    onChange={(product, text) => updateItem(i, 'product', product, text)}
+                    text={item.description}
                     placeholder="Search or add product..."
                     inputStyle={{ background: 'var(--surface2)', border: '1.5px solid var(--border)', fontSize: 14 }}
                   />
@@ -1675,7 +1719,7 @@ function InvoiceTab({ card, reload }) {
 
       {isEditable && (
         <div style={{ padding: '0 12px 20px' }}>
-          <button className="btn btn-primary" onClick={saveInvoice}>Save Invoice</button>
+          <button className="btn btn-primary" onClick={() => saveInvoice()}>Save Invoice</button>
         </div>
       )}
     </div>

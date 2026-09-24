@@ -691,3 +691,41 @@ Continue if you have next steps, or stop and ask for clarification if you are un
 ## 22/09/2026, 18:42:35
 
 you fixed it?
+## 24/09/2026, 22:06:05
+
+[2026-09-24 7:10 PM] jamss: A request was made for serial numbers for specific parts. Engine, Hull, and 2-3 other items that are specific to a boat. Helping mechanics to identify warranty info and small parts specific to the engine for ordering materials. Saves them from diving into the bottom of the boat to find these #s in future service work[2026-09-24 7:11 PM] jamss: When i click on line items for invoice, i get a blank page
+[2026-09-24 7:12 PM] jamss: [ Photo ]
+[2026-09-24 7:16 PM] jamss: Need a way to undo "paid". If oops
+[2026-09-24 7:17 PM] jamss: Oh.. when i navigate away from invoice page, it resets the paid or the issued buttons
+[2026-09-24 7:18 PM] jamss in reply to jamss:
+> ‎⁨A request was made for serial numbers for specific parts....
+This is great, because it demonstrates true interest from a mechanic
+
+
+
+We need to be able to assign a boat to a specific employee
+## 24/09/2026, 22:12:01
+
+[2026-09-24 7:10 PM] jamss: A request was made for serial numbers for specific parts. Engine, Hull, and 2-3 other items that are specific to a boat. Helping mechanics to identify warranty info and small parts specific to the engine for ordering materials. Saves them from diving into the bottom of the boat to find these #s in future service work[2026-09-24 7:11 PM] jamss: When i click on line items for invoice, i get a blank page
+[2026-09-24 7:12 PM] jamss: [ Photo ]
+[2026-09-24 7:16 PM] jamss: Need a way to undo "paid". If oops
+[2026-09-24 7:17 PM] jamss: Oh.. when i navigate away from invoice page, it resets the paid or the issued buttons
+[2026-09-24 7:18 PM] jamss in reply to jamss:
+> ‎⁨A request was made for serial numbers for specific parts....
+This is great, because it demonstrates true interest from a mechanic
+
+
+
+We need to be able to assign a boat to a specific employee
+## 24/09/2026, 22:15:49
+
+boats should be normalized, not become a dumping ground for fields.
+## 24/09/2026, 22:17:43
+
+ensure the plan is elegent
+## 24/09/2026, 22:22:45
+
+go
+## 24/09/2026, 22:30:16
+
+maket he flourishfooter a little taler so i can't see the scale.

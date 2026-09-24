@@ -98,6 +98,28 @@ module.exports = async function createApp() {
     // Column already exists, ignore
   }
 
+  try {
+    await db.exec(`CREATE TABLE IF NOT EXISTS boat_serials (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      boat_id INT NOT NULL,
+      type VARCHAR(50) NOT NULL,
+      serial_number VARCHAR(255) NOT NULL,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    console.log("  Ensured boat_serials table");
+  } catch (e) {
+    // Table already exists (SQLite creates it from schema.sql), ignore
+  }
+
+  try {
+    await db.exec("CREATE INDEX idx_boat_serials_boat ON boat_serials(boat_id)");
+  } catch (e) {
+    // Index already exists, ignore
+  }
+
+  const SERIAL_TYPES = ['engine', 'hull', 'outdrive', 'trailer', 'other'];
+
   function generateCustomerToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let token = '';
@@ -367,29 +389,54 @@ module.exports = async function createApp() {
     res.json({ ok: true });
   }));
 
+  async function attachSerials(boats) {
+    if (!boats.length) return boats;
+    const all = await db.prepare('SELECT * FROM boat_serials ORDER BY id').all();
+    const byBoat = new Map();
+    for (const s of all) {
+      if (!byBoat.has(s.boat_id)) byBoat.set(s.boat_id, []);
+      byBoat.get(s.boat_id).push(s);
+    }
+    for (const b of boats) b.serials = byBoat.get(b.id) || [];
+    return boats;
+  }
+
+  function normalizeSerials(serials) {
+    if (!Array.isArray(serials)) return [];
+    return serials
+      .filter(s => s && s.serial_number && String(s.serial_number).trim())
+      .map(s => ({
+        type: SERIAL_TYPES.includes(s.type) ? s.type : 'other',
+        serial_number: String(s.serial_number).trim(),
+        notes: s.notes ? String(s.notes).trim() : null,
+      }));
+  }
+
   app.get('/api/boats', requireAuth, asyncHandler(async (req, res) => {
     const { q } = req.query;
     if (q) {
-      res.json(await db.prepare(`
+      const rows = await db.prepare(`
         SELECT b.*, c.name as customer_name 
         FROM boats b 
         LEFT JOIN customers c ON b.customer_id = c.id 
         WHERE b.name LIKE ? OR c.name LIKE ? 
         ORDER BY b.name LIMIT 30
-      `).all(`%${q}%`, `%${q}%`));
+      `).all(`%${q}%`, `%${q}%`);
+      res.json(await attachSerials(rows));
     } else {
-      res.json(await db.prepare(`
+      const rows = await db.prepare(`
         SELECT b.*, c.name as customer_name 
         FROM boats b 
         LEFT JOIN customers c ON b.customer_id = c.id 
         ORDER BY b.name
-      `).all());
+      `).all();
+      res.json(await attachSerials(rows));
     }
   }));
 
   app.post('/api/boats', requireEditor, asyncHandler(async (req, res) => {
     try {
-      const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null } = req.body;
+      const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null, serials } = req.body;
       if (!customer_id) return res.status(400).json({ error: 'Customer required' });
       
       // Check for existing boat under this customer (case-insensitive)
@@ -413,7 +460,11 @@ module.exports = async function createApp() {
         rate_type || 'SW',
         length_ft || null
       );
-      res.json({ id: r.lastInsertRowid });
+      const boatId = r.lastInsertRowid;
+      for (const s of normalizeSerials(serials)) {
+        await db.prepare('INSERT INTO boat_serials (boat_id, type, serial_number, notes) VALUES (?, ?, ?, ?)').run(boatId, s.type, s.serial_number, s.notes);
+      }
+      res.json({ id: boatId });
     } catch (e) {
       console.error('[BOAT CREATE ERROR]', e);
       res.status(500).json({ error: e.message || 'Failed to create boat' });
@@ -424,6 +475,7 @@ module.exports = async function createApp() {
     const boat = await db.prepare('SELECT * FROM boats WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
     if (!boat) return res.status(404).json({ error: 'Not found' });
     boat.customer = await db.prepare('SELECT * FROM customers WHERE id = ? AND deleted_at IS NULL').get(boat.customer_id);
+    boat.serials = await db.prepare('SELECT * FROM boat_serials WHERE boat_id = ? ORDER BY id').all(req.params.id);
     res.json(boat);
   }));
 
@@ -432,7 +484,7 @@ module.exports = async function createApp() {
     const existingBoat = await db.prepare('SELECT id FROM boats WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
     if (!existingBoat) return res.status(404).json({ error: 'Not found' });
     
-    const { name, motor_type, model, licence, trailer_licence, rate_type, length_ft } = req.body;
+    const { name, motor_type, model, licence, trailer_licence, rate_type, length_ft, serials } = req.body;
     const updates = [];
     const params = [];
     if (name !== undefined) { updates.push('name = ?'); params.push(name || null); }
@@ -445,6 +497,12 @@ module.exports = async function createApp() {
     if (updates.length) {
       params.push(req.params.id);
       await db.prepare(`UPDATE boats SET ${updates.join(', ')} WHERE id=?`).run(...params);
+    }
+    if (serials !== undefined) {
+      await db.prepare('DELETE FROM boat_serials WHERE boat_id = ?').run(req.params.id);
+      for (const s of normalizeSerials(serials)) {
+        await db.prepare('INSERT INTO boat_serials (boat_id, type, serial_number, notes) VALUES (?, ?, ?, ?)').run(req.params.id, s.type, s.serial_number, s.notes);
+      }
     }
     res.json({ ok: true });
   }));
@@ -520,6 +578,7 @@ module.exports = async function createApp() {
     card.received_items = await db.prepare('SELECT * FROM received_items WHERE card_id = ?').all(req.params.id);
     card.authorized_work = await db.prepare('SELECT * FROM authorized_work WHERE card_id = ?').all(req.params.id);
     card.condition = await db.prepare('SELECT * FROM condition_assessment WHERE card_id = ?').all(req.params.id);
+    card.serials = await db.prepare('SELECT * FROM boat_serials WHERE boat_id = ? ORDER BY id').all(card.boat_id);
     card.work_logs = (await db.prepare(`
       SELECT wl.*, e.name as employee_name, e.initials as employee_initials
       FROM work_logs wl
