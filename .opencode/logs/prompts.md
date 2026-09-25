@@ -729,3 +729,194 @@ go
 ## 24/09/2026, 22:30:16
 
 maket he flourishfooter a little taler so i can't see the scale.
+## 24/09/2026, 22:38:12
+
+i dont see any changes.  
+## 24/09/2026, 22:45:39
+
+i restarted it ofc
+## 24/09/2026, 22:46:34
+
+godaddy build it auto.
+## 24/09/2026, 22:51:45
+
+ohhhh, i have to pull to preview first, then publish to live, then restart! We should save that somewhere.
+## 24/09/2026, 22:54:17
+
+make a prompt to scan the codebase from mlutipe angles, we've never done a code debt or UIux check, or wide bug test, etc etc
+## 24/09/2026, 22:55:58
+
+# MULTI-ANGLE CODEBASE AUDIT — Campbell's Landing Marina app
+You are a senior staff engineer + security engineer + UX auditor running a
+full-project health sweep. This is READ-ONLY reconnaissance first: do NOT edit,
+refactor, or "fix" anything until I approve findings. Your job is to find and
+rank problems with evidence, not to be nice.
+
+## Ground rules
+- State which angle you're running before each section.
+- Every finding needs: [Severity] file:line — what breaks, how to reproduce.
+- Severity = Critical / High / Medium / Low (impact x likelihood, not effort).
+- No speculation without a code reference. "I didn't check X" is allowed.
+- Prefer falsifying over confirming: assume the bug/UX flaw exists, then hunt.
+- Do not fix generated-test issues. There is no test suite here yet — say so.
+- Windows 11 / PowerShell environment.
+
+## Project seed context (verify, don't trust)
+- Stack: React 19, Vite 8, Tailwind 3, Express 4, multer, tesseract.js (OCR),
+  qr-code-styling, better-sqlite3 + mysql2. PWA via vite-plugin-pwa (src/sw.js).
+- No `lint`, `typecheck`, or `test` scripts in package.json. Flag this as a
+  systemic gap and perform equivalent manual checks.
+- Known hotspots (suspect, investigate):
+    src/screens/CardDetailScreen.jsx  (~1900 lines)
+    server.js                          (~1000 lines)
+    src/components/ScanCardScanner.jsx (~630 lines)
+    src/screens/AdminScreen.jsx        (~480 lines)
+- Swappable DB engine: db/index.js, db/sqlite.js, db/mysql.js, db/schema.sql.
+- State via contexts: AuthCtx, NavCtx, ThemeCtx, ToastCtx.
+- Secrets/config: .env.example. File uploads via multer.
+
+## ANGLES TO RUN (in order)
+
+### A0. Map first
+List the real architecture: entry points, request flow (UI -> api.js -> server.js
+-> db engine), state ownership, and the boundaries between them. Note where
+state/business logic leaks into UI components. 1 page max.
+
+### A1. Technical Debt & Dead Code
+Unused files/exports/deps/props, duplicated logic, stale abstractions, temp
+hacks, oversized files, commented-out code. Rank top 10 by ROI.
+
+### A2. Wide Bug Test (Bug Hunter)
+Crashes, null/undefined edges, async/race conditions, stale state, unhandled
+rejections, infinite loops, off-by-one, error swallowing, resource/memory leaks
+(tesseract workers, multer temp files, DB handles). Include a manual test matrix
+of flows: login, create card, scan QR/OCR, upload photo, edit/delete card,
+customer CRUD, admin actions, offline/reconnect. List repro steps per bug.
+
+### A3. Data Integrity & DB Engine Parity
+SQLite vs MySQL behavior drift, missing transactions, schema/schema.sql
+migrations, SQL injection via raw queries, constraint/index gaps, WAL/backup
+safety (db/backup.js), concurrent writes, N+1 queries.
+
+### A4. Security Review
+Assume attackers control every input. Check auth/authz on every route, session
+handling (AuthCtx + server), IDOR (can user A read user B's card/customer?),
+file-upload validation (multer: type/size/path traversal), XSS in React render
+paths, secrets in repo/env, rate limiting, OCR/QR input abuse, CORS/headers.
+Explain the exploit for each finding.
+
+### A5. UI/UX + Accessibility Audit (first time — be thorough)
+For every screen: information hierarchy, loading/empty/error states, destructive
+action confirmation, feedback after actions, mobile one-handed use, touch target
+size, contrast (WCAG AA), keyboard/focus order, ARIA/labels, color-only status
+(StatusBadge), text truncation/overflow, dark mode (ThemeCtx) parity, PWA
+offline UX and install/update prompts. Note consistency across screens.
+
+### A6. Architecture Scalability
+Ignore syntax. If usage grows 10x (more boats, cards, customers, photos, users),
+what breaks? Coupling, god-files, state explosion, lack of layers. Recommend
+what to DELETE, not just add.
+
+### A7. Performance
+Unnecessary renders, missing memoization on the big screens, repeated API calls,
+large bundle entry (index.html 1092 lines?), image/photo handling, DB query
+patterns, startup cost of tesseract/QR libs.
+
+### A8. Release / Production Readiness
+Everything blocking a real deployment: error handling + user-facing messages,
+logging/monitoring, backup/restore (db/backup.js), env config, migrations,
+rollback, mobile/browser compat, missing tests/lint/CI, docs.
+
+## Cross-cutting deliverables
+- Maintain `.opencode/review-summary.md`; append findings after EACH angle
+  (do not batch). Format:
+    ## Angle N: [Name]
+    ### Findings
+    - [Severity] [file:line] — description + repro
+    ### Cross-references
+    - Relates to Angle X — finding #Y
+- Keep a running count of Critical/High per angle.
+
+## Final rollup (after all angles)
+1. Top 20 prioritized backlog: item | severity | angle | why it matters | est. effort.
+2. Scorecard 0-10 across: correctness, security, data integrity, UX, a11y,
+   performance, architecture, maintainability, testability, release readiness.
+3. Classify the project: Prototype / MVP / Production Ready / Enterprise / World Class.
+4. Name the 3 systemic changes that prevent the most recurrence, and the
+   single highest-risk issue to fix first.
+
+Do not stop at the first plausible answer. If an angle is clean, prove it.
+
+run this in phases 
+## 24/09/2026, 22:57:12
+
+READ-ONLY code audit. Read the file D:\Desktop\marine\src\screens\CardDetailScreen.jsx (~1900 lines) thoroughly and also D:\Desktop\marine\src\api.js (note: api(method, path) automatically prefixes '/api', so any call whose path already starts with '/api' produces a double prefix and 404s).
+
+Report ONLY concrete findings with exact `file:line` references and a one-line repro/description each. Focus on:
+1. Correctness/bugs: stale state, async races, missing await, state updates after unmount, missing error handling, optimistic updates that can desync, double /api prefix calls, off-by-one, wrong dependencies in useEffect/useCallback, forms that don't reset.
+2. Resource leaks: setInterval/setTimeout/addEventListener/object URLs/camera or tesseract workers not cleaned up in useEffect return.
+3. React performance: missing memoization on expensive computations, re-fetching on every render, large lists without keys, inline handlers.
+4. UX: loading/empty/error states per section, destructive actions without confirmation, missing feedback after save, touch target sizes, keyboard/focus, aria-label usage, text overflow.
+5. Any TODO/FIXME/hack comments, commented-out code, duplicated logic, very long functions.
+6. Any role/permission checks that are missing (who can edit what).
+
+Do NOT modify anything. Return a bullet list grouped by category, each with [Severity: Critical/High/Medium/Low] file:line — description. Be precise and do not speculate; if unsure, say so.
+## 24/09/2026, 22:57:14
+
+READ-ONLY code audit. Read these files thoroughly:
+- D:\Desktop\marine\src\components\ScanCardScanner.jsx (~630 lines)
+- D:\Desktop\marine\src\screens\NewLogScreen.jsx
+- D:\Desktop\marine\src\screens\NewCardScreen.jsx
+
+Context: api(method, path) in src/api.js auto-prefixes '/api', so any call path already beginning with '/api' double-prefixes and fails (404). Stack includes tesseract.js (OCR) and qr-code-styling.
+
+Report ONLY concrete findings with exact `file:line` references, each with [Severity: Critical/High/Medium/Low]. Focus on:
+1. tesseract.js lifecycle: is a Worker created and terminated? Is it reused or leaked per scan? Are createWorker/recognize errors handled? Is OCR run on unbounded user input (abuse/DoS)? Loading of language data blocking UI?
+2. Camera/getUserMedia streams: stopped on unmount/navigation? Permissions errors handled? Video element cleanup? torch/zoom assumptions.
+3. QR decoding, file input handling, image validation.
+4. Async races, missing awaits, state updates after unmount, missing finally/cleanup, unhandled promise rejections.
+5. Double '/api' prefix calls.
+6. Form validation, destructive actions, loading/empty/error states, a11y (labels, aria, touch targets), text overflow.
+7. TODO/FIXME/hack comments, dead code, duplicated logic.
+
+Do NOT modify anything. Return a bullet list grouped by category. Be precise; don't speculate.
+## 24/09/2026, 22:57:17
+
+READ-ONLY code audit. Read these files thoroughly:
+- D:\Desktop\marine\src\screens\AdminScreen.jsx (~480 lines)
+- D:\Desktop\marine\src\screens\SettingsScreen.jsx
+- D:\Desktop\marine\src\screens\BoatsScreen.jsx (~16KB)
+- D:\Desktop\marine\src\screens\MapScreen.jsx
+- D:\Desktop\marine\src\screens\CustomerViewScreen.jsx
+- D:\Desktop\marine\src\components\SwipeableTask.jsx
+- D:\Desktop\marine\src\components\Icon.jsx
+
+Context: api(method, path) in src/api.js auto-prefixes '/api', so any call path already beginning with '/api' double-prefixes and fails (404). ThemeCtx toggles dark mode via body class. Roles: admin, office, mechanic, cleaner, wrapper.
+
+Report ONLY concrete findings with exact `file:line` references, each [Severity: Critical/High/Medium/Low]. Focus on:
+1. Correctness/bugs: double '/api' prefix, async races, missing awaits, silent error swallowing (.catch(()=>{})), stale closures, form state not reset, off-by-one.
+2. Permissions: actions shown to roles that the server will reject, or missing client checks.
+3. UX/a11y: loading/empty/error states, destructive actions without confirmation, missing feedback after save, aria-label usage, touch target sizes, button-only-icon without label, text overflow/truncation, keyboard focus.
+4. Dark mode: hardcoded hex colors (e.g. '#fff', '#000') instead of CSS variables that break in the other theme.
+5. Resource leaks (listeners/intervals not cleaned), MapScreen map instance lifecycle.
+6. TODO/FIXME/hack comments, dead/commented-out code, duplicated logic.
+
+Do NOT modify anything. Return a bullet list grouped by category. Be precise; don't speculate.
+## 24/09/2026, 23:05:37
+
+suggest how the monolithich settings can be mroe accessible.  a basic and advanced mode? tabs for each section rathen than giant scroll? Cards you can see behind each other (could be cool), etc?
+## 24/09/2026, 23:05:40
+
+Explore this codebase (D:\Desktop\marine) and find the settings UI implementation. I need to understand:
+
+1. Where the settings UI is defined (file paths, component names)
+2. How it's structured currently - is it a giant scrolling page with sections? Cards? What UI framework is used (React, Vue, Svelte, etc.)?
+3. What settings/sections exist (list them)
+4. What styling approach is used (CSS modules, Tailwind, styled-components, plain CSS)
+5. Any existing tab, accordion, modal, or navigation patterns already in the codebase that could be reused
+6. The general app architecture (state management, routing)
+
+Be thorough but report concisely. Give me exact file paths and line numbers for the settings component(s). Include representative code snippets of how settings sections are currently rendered (just enough to understand the pattern, not entire files).
+## 24/09/2026, 23:10:19
+
+next?

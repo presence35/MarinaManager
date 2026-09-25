@@ -6793,3 +6793,800 @@ One thing to verify on your side: the MySQL table is created lazily at server st
 ## 24/09/2026, 22:31:30
 
 I searched the whole repo and found no component, class, or identifier named `FlourishFooter`, `flourish`, or `scale` in the source (only CSS transform `scale(...)`, browser viewport `scale`, and the Settings version footer). So I can't reliably identify what to make taller.
+## 24/09/2026, 22:38:27
+
+You're right — and I can explain why. Let me confirm.
+## 24/09/2026, 22:39:15
+
+Found it. The changes exist and are even built — the problem is deployment/runtime, not code.
+## 24/09/2026, 22:39:31
+
+Your changes are done, committed, and compiled — they're just not where you're looking.
+
+## Diagnosis
+
+- Commit `49ac583 "features"` contains all the work: `server.js` (+73), `db/schema.sql` (+12), `BoatsScreen.jsx`, `CardDetailScreen.jsx`, `ProductAutocomplete.jsx`, `constants.js`. (That's why `git status` is clean.)
+- `dist/` was rebuilt after the edits and `build-version.json` reads `1.1.10+20260924193803-49ac583` — i.e. the built bundle **includes** the changes.
+- **No `node.exe` is running locally**, so you're not viewing a local server.
+- Git log shows production is on GoDaddy; there's no deploy script.
+
+So the code is correct; nothing is *serving* it. Three things gate visibility:
+
+1. **Not deployed/rebuilt on the running host.** If you're looking at the GoDaddy instance, it still serves the old `dist/` + old `server.js`.
+2. **Server not restarted.** The `boat_serials` table and new routes are created at boot (`server.js` logs `Ensured boat_serials table`). Without a restart, serials silently no-op even with the new frontend.
+3. **Service worker cache.** `src/sw.js` uses `precacheAndRoute` + `skipWaiting`/`clientsClaim`, so installed PWAs/browsers can serve the old bundle until the SW rolls over (often needs the Settings → *Clear cache & reload* button or a hard refresh).
+
+## Plan to make it visible
+
+1. Rebuild clean: `npm run build` (regenerates `dist/` + version).
+2. Start/restart the server: `npm start` — confirm the log line `Ensured boat_serials table`.
+3. Open `http://localhost:3000`, hard-refresh (or Settings → Clear cache & reload) to bypass the SW.
+4. Verify: Boats → edit a boat → serial fields; assign via the person icon; Card → Invoice → Mark Paid → navigate away/back → status persists; Undo to Issued.
+5. Deploy the new `dist/` **and** `server.js` to GoDaddy, then restart the process there (the table creation is required on the MySQL host too).
+
+One question so I point you at the right target:
+## 24/09/2026, 22:41:06
+
+The changes are already pushed — `main` is at `49ac583 "features"` and in sync with `origin/main` (`github.com/presence35/MarinaManager`). So this is purely a production deploy/restart gap on GoDaddy.
+
+## Why GoDaddy still shows the old app
+
+- `dist/` is **gitignored** (`.gitignore:4`), so the built bundle is *not* in the repo. GoDaddy must either run `npm run build` on the server after pulling, or you must upload `dist/` separately.
+- `server.js` must be **restarted** for the new routes and the `boat_serials` table bootstrap to take effect. If only the frontend was updated, serials/most new behavior no-op.
+- The installed PWA service worker precaches assets, so devices keep the old bundle until it rolls over.
+
+## Production deploy checklist
+
+1. On GoDaddy: pull latest `main` (or upload changed files).
+2. Run `npm install` (no new deps, but safe) then `npm run build` to regenerate `dist/` — or upload the locally built `dist/`.
+3. **Restart the Node process.** Watch the startup log for `Ensured boat_serials table`.
+   - If that line is missing, the table wasn't created. On MySQL the account needs `CREATE` privilege; otherwise create it manually (the DDL is in `db/schema.sql` and the `server.js` bootstrap).
+4. On each device/browser: Settings → *Clear cache & reload* (or hard refresh once) so the service worker swaps in the new bundle.
+5. Verify: Boats → edit → serial fields + person icon to assign; Card → Invoice → Mark Paid, navigate away/back → status persists, Undo to Issued appears.
+
+## The one unknown
+
+I can't see how GoDaddy is wired. Tell me which applies and I'll give exact commands:
+
+- **Git integration / "deploy" button** in the Node hosting panel (pull + build + restart)?
+- **cPanel / file manager / FTP** upload?
+- **SSH** access where you `git pull` and run `npm run build`?
+- A **CI** step?
+
+Also worth confirming on the server: is `DB_HOST` set (MySQL) or is it running SQLite at `/private/data`? That determines whether the `CREATE TABLE` bootstrap or `schema.sql` is the one that applies.
+## 24/09/2026, 22:43:53
+
+That screenshot confirms it — that's the **old build**. The new edit form has a **SERIAL NUMBERS** section between Licence/Trailer and the buttons (and the Cancel/Save buttons moved *outside* the card). Production is still serving the pre-change bundle.
+
+Let me check what deploy mechanism (if any) exists in the repo.
+## 24/09/2026, 22:44:11
+
+No deploy tooling exists in the repo, and `.env.example` confirms GoDaddy auto-provisions **MySQL** — so the table is created by the `server.js` bootstrap on restart, not by `schema.sql`.
+
+## What's happening
+
+The code is on GitHub, but production was never rebuilt/restarted. Two structural reasons:
+
+1. **`dist/` is gitignored** — a GitHub push does **not** carry the built frontend. GoDaddy must run `npm run build` (or receive an uploaded `dist/`).
+2. **`server.js` must be restarted** on GoDaddy for the new routes and the `CREATE TABLE boat_serials` bootstrap to run. Until then, even a new frontend would show no serials.
+
+Your screenshot is the pre-change bundle, so neither has happened on the host yet.
+
+## Plan
+
+**On GoDaddy (production):**
+1. Update code to `main` @ `49ac583` (or newer) — by whatever mechanism you use.
+2. Run `npm install` (no new dependencies; safe).
+3. Run `npm run build` to regenerate `dist/` — required, since `dist/` isn't in git.
+4. **Restart the Node app.** On startup, look for `Ensured boat_serials table`. If that line doesn't appear, the MySQL account lacked `CREATE`; create the table manually (DDL is in the `server.js` bootstrap / `db/schema.sql`).
+5. On phones/desktops: Settings → *Clear cache & reload* once (the service worker precaches assets).
+
+**Smoke tests after deploy:**
+- Open `<site>/api/version` — the version string should reference `49ac583` (built bundle), not the old build.
+- Boats → edit a boat → **SERIAL NUMBERS** section shows; person icon assigns a mechanic.
+- Card → Invoice → Mark Paid → navigate away/back → status stays **PAID**, and *Undo to Issued* appears.
+
+## Open question
+
+How do you push to GoDaddy? That decides the exact commands:
+
+- **cPanel → Setup Node.js App** (Run NPM Install / Restart buttons)?
+- Git pull on the server?
+- Manual FTP / File Manager upload?
+- SSH?
+
+If it's manual upload, I can (on approval) produce a ready-to-upload bundle (`dist/` + `server.js` + `package.json`/lockfile) so you just drop it in and restart — say the word and I'll prepare it once we're out of plan mode.
+## 24/09/2026, 22:46:03
+
+Restarting Node only applies `server.js`. It does **not** update the screen you're looking at — the UI comes from `dist/`, which is **gitignored** and only produced by `npm run build`.
+
+Two separate artifacts, two separate gates:
+
+| Layer | Source | How it reaches GoDaddy |
+|---|---|---|
+| Backend (`server.js`, routes, `boat_serials` table) | tracked in git | pull/upload + **restart** |
+| Frontend (the edit form, serial UI) | `dist/` — **gitignored** | must run `npm run build` on the server (or upload `dist/`) |
+
+`build-version.json` is also gitignored, so a `git pull` never updates the served version string either.
+
+So if your deploy is "git pull → restart," the backend is new but the frontend is still the old bundle from some earlier build. That's exactly your screenshot: old form, no **SERIAL NUMBERS** section.
+
+## Most likely missing step
+
+On the GoDaddy server, in the app directory:
+
+1. `npm install` (safe; no new deps)
+2. **`npm run build`** ← this is almost certainly what's missing
+3. restart the Node app
+4. clear the PWA/browser cache once (service worker precaches)
+
+## Let's verify rather than guess
+
+Give me the production URL and I'll check two things (read-only):
+
+- `<url>/api/version` — if it doesn't reference `49ac583`, the frontend was never rebuilt on the server.
+- The served JS bundle — whether it contains the new markers (`Undo to Draft`, `Serial Numbers`). If absent, `dist/` is stale regardless of the git state.
+
+Also tell me: does your GoDaddy flow ever run `npm run build`, or do you upload `dist/` by hand? That determines whether it's a one-time manual build or a step you need to add to each deploy.
+
+No code changes are needed — this is deploy-only. Files I'd touch: none.
+## 24/09/2026, 22:46:57
+
+If GoDaddy auto-builds, then the server side is probably current and your device is holding the old bundle — the service worker precaches assets, so an installed PWA can keep serving the old UI after a deploy.
+
+There's a built-in test for this. In the app: **Setup (Settings) → scroll to the bottom**. That footer shows `MARINA MANAGER v…` (fetched live from `/api/version`), and tapping it runs `clearCache()` (unregisters the SW, wipes caches, reloads).
+
+- If the footer says **`1.1.10+…-49ac583`** → the server has the new build, so what you're seeing is the client cache. Tap that footer (or hard-refresh) and re-check the Edit Boat screen.
+- If it shows an **older** build string → GoDaddy didn't actually build `49ac583` (wrong branch/repo, or the build failed). Then we check the deploy/build logs.
+
+Two quick things to confirm:
+
+1. What exact version string does that footer show?
+2. Is your screenshot from an **installed PWA** (home-screen icon) or a normal browser tab? (Installed PWAs are the ones that get stuck on the old precache.)
+3. If you share the production URL, I'll fetch `/api/version` and the served JS (read-only) and tell you definitively whether the host or your device is stale.
+
+No code changes needed. Files I'd touch: none.
+## 24/09/2026, 22:52:20
+
+Saved to `README.md:5` — the full GoDaddy sequence (Pull to Preview → Publish to Live → Restart), a symptom table for each skipped step, the post-deploy PWA cache-clear, and local dev commands.
+
+If you'd rather have it in `AGENTS.md` so it's surfaced to tooling/agents on every session too, say so and I'll add it there as well.
+## 24/09/2026, 22:54:49
+
+Here's a ready-to-paste mega audit prompt, tailored to this repo (`marina-repair-app` — React 19 + Vite PWA, Express, SQLite/MySQL engine, OCR/QR scanning). It blends the engineering-prompts modes into one multi-angle sweep.
+
+```text
+# MULTI-ANGLE CODEBASE AUDIT — Campbell's Landing Marina app
+
+You are a senior staff engineer + security engineer + UX auditor running a
+full-project health sweep. This is READ-ONLY reconnaissance first: do NOT edit,
+refactor, or "fix" anything until I approve findings. Your job is to find and
+rank problems with evidence, not to be nice.
+
+## Ground rules
+- State which angle you're running before each section.
+- Every finding needs: [Severity] file:line — what breaks, how to reproduce.
+- Severity = Critical / High / Medium / Low (impact x likelihood, not effort).
+- No speculation without a code reference. "I didn't check X" is allowed.
+- Prefer falsifying over confirming: assume the bug/UX flaw exists, then hunt.
+- Do not fix generated-test issues. There is no test suite here yet — say so.
+- Windows 11 / PowerShell environment.
+
+## Project seed context (verify, don't trust)
+- Stack: React 19, Vite 8, Tailwind 3, Express 4, multer, tesseract.js (OCR),
+  qr-code-styling, better-sqlite3 + mysql2. PWA via vite-plugin-pwa (src/sw.js).
+- No `lint`, `typecheck`, or `test` scripts in package.json. Flag this as a
+  systemic gap and perform equivalent manual checks.
+- Known hotspots (suspect, investigate):
+    src/screens/CardDetailScreen.jsx  (~1900 lines)
+    server.js                          (~1000 lines)
+    src/components/ScanCardScanner.jsx (~630 lines)
+    src/screens/AdminScreen.jsx        (~480 lines)
+- Swappable DB engine: db/index.js, db/sqlite.js, db/mysql.js, db/schema.sql.
+- State via contexts: AuthCtx, NavCtx, ThemeCtx, ToastCtx.
+- Secrets/config: .env.example. File uploads via multer.
+
+## ANGLES TO RUN (in order)
+
+### A0. Map first
+List the real architecture: entry points, request flow (UI -> api.js -> server.js
+-> db engine), state ownership, and the boundaries between them. Note where
+state/business logic leaks into UI components. 1 page max.
+
+### A1. Technical Debt & Dead Code
+Unused files/exports/deps/props, duplicated logic, stale abstractions, temp
+hacks, oversized files, commented-out code. Rank top 10 by ROI.
+
+### A2. Wide Bug Test (Bug Hunter)
+Crashes, null/undefined edges, async/race conditions, stale state, unhandled
+rejections, infinite loops, off-by-one, error swallowing, resource/memory leaks
+(tesseract workers, multer temp files, DB handles). Include a manual test matrix
+of flows: login, create card, scan QR/OCR, upload photo, edit/delete card,
+customer CRUD, admin actions, offline/reconnect. List repro steps per bug.
+
+### A3. Data Integrity & DB Engine Parity
+SQLite vs MySQL behavior drift, missing transactions, schema/schema.sql
+migrations, SQL injection via raw queries, constraint/index gaps, WAL/backup
+safety (db/backup.js), concurrent writes, N+1 queries.
+
+### A4. Security Review
+Assume attackers control every input. Check auth/authz on every route, session
+handling (AuthCtx + server), IDOR (can user A read user B's card/customer?),
+file-upload validation (multer: type/size/path traversal), XSS in React render
+paths, secrets in repo/env, rate limiting, OCR/QR input abuse, CORS/headers.
+Explain the exploit for each finding.
+
+### A5. UI/UX + Accessibility Audit (first time — be thorough)
+For every screen: information hierarchy, loading/empty/error states, destructive
+action confirmation, feedback after actions, mobile one-handed use, touch target
+size, contrast (WCAG AA), keyboard/focus order, ARIA/labels, color-only status
+(StatusBadge), text truncation/overflow, dark mode (ThemeCtx) parity, PWA
+offline UX and install/update prompts. Note consistency across screens.
+
+### A6. Architecture Scalability
+Ignore syntax. If usage grows 10x (more boats, cards, customers, photos, users),
+what breaks? Coupling, god-files, state explosion, lack of layers. Recommend
+what to DELETE, not just add.
+
+### A7. Performance
+Unnecessary renders, missing memoization on the big screens, repeated API calls,
+large bundle entry (index.html 1092 lines?), image/photo handling, DB query
+patterns, startup cost of tesseract/QR libs.
+
+### A8. Release / Production Readiness
+Everything blocking a real deployment: error handling + user-facing messages,
+logging/monitoring, backup/restore (db/backup.js), env config, migrations,
+rollback, mobile/browser compat, missing tests/lint/CI, docs.
+
+## Cross-cutting deliverables
+- Maintain `.opencode/review-summary.md`; append findings after EACH angle
+  (do not batch). Format:
+    ## Angle N: [Name]
+    ### Findings
+    - [Severity] [file:line] — description + repro
+    ### Cross-references
+    - Relates to Angle X — finding #Y
+- Keep a running count of Critical/High per angle.
+
+## Final rollup (after all angles)
+1. Top 20 prioritized backlog: item | severity | angle | why it matters | est. effort.
+2. Scorecard 0-10 across: correctness, security, data integrity, UX, a11y,
+   performance, architecture, maintainability, testability, release readiness.
+3. Classify the project: Prototype / MVP / Production Ready / Enterprise / World Class.
+4. Name the 3 systemic changes that prevent the most recurrence, and the
+   single highest-risk issue to fix first.
+
+Do not stop at the first plausible answer. If an angle is clean, prove it.
+```
+
+Want me to save this as a file so you can reuse it? If so, the only file I'd create:
+
+1. `.opencode/prompts/codebase-audit.md`
+
+Two quick choices before you run it:
+- **Run style:** one mega pass (A0→A8 in a single session) vs. phased (A1–A2, then A3–A4, then A5–A8) — phased gives deeper per-angle results but costs more sessions.
+- **Fix policy:** findings-only report, or fix Criticals as they surface.
+
+Which do you want?
+## 24/09/2026, 22:56:04
+
+I'll start with read-only reconnaissance. Note: plan mode forbids writes, so I'll defer `.opencode/review-summary.md` persistence until you approve. Let me map the repo first.
+## 24/09/2026, 22:56:20
+
+Now the server. Let me extract route surface, auth middleware, and file handling at once.
+## 24/09/2026, 22:56:59
+
+Now let me analyze the frontend. I'll read the small components directly and delegate the large hotspots to explore agents.
+## 24/09/2026, 22:57:17
+
+Now delegating the large hotspots to explore agents while I inspect the shell/CSS.
+## 24/09/2026, 22:57:17
+
+I'll read the three files thoroughly.
+## 24/09/2026, 22:57:20
+
+I'll read all the specified files in parallel.
+## 24/09/2026, 22:57:23
+
+Let me confirm the api.js prefix behavior and check for any '/api' prefixed calls.
+## 24/09/2026, 22:57:38
+
+Let me verify the `api()` prefix behavior and scan for other double-prefix occurrences.
+## 24/09/2026, 22:58:26
+
+All files read. Findings below, grouped by category. Every item cites exact `file:line`; severities reflect concrete impact.
+
+## Correctness / Bugs
+
+- **Critical** — `BoatsScreen.jsx:252` calls `api('DELETE', '/api/boats/${b.id}')`. `api()` prepends `/api` at `api.js:16`, so the request hits `/api/api/boats/:id` and returns 404. The boat delete button always fails (and the confirm at `:251` is pointless). Same latent bug exists outside the listed files at `CustomersScreen.jsx:79` (`api('DELETE', '/api/customers/...')`).
+- **Medium** — `BoatsScreen.jsx:25-33` `fetchBoats()` runs on every `search` keystroke with no debounce, AbortController, or request sequence token. Responses can resolve out of order and overwrite newer results; `setLoading(true)` on each keystroke also flashes "Loading..." over the list.
+- **Medium** — `BoatsScreen.jsx:48-56` `openEdit` is async with no cancellation. Quickly tapping two different boats can let the first `GET /boats/:id` resolve last, overwriting `editingBoat`/`originalBoatRef.current` with the wrong boat. Same pattern at `:79-86`.
+- **Medium** — `BoatsScreen.jsx:88-100` `saveBoat` has no in-flight guard or disabled state; double-tapping Save fires duplicate PUTs. Same for `toggleAssignment` (`:109-121`), and `AdminScreen.jsx` `createEmployee`/`createItem`/`createProduct` (`:67,115,173`) which lack any `saving` guard except the employee button (`saving` only gates `:263`).
+- **Medium** — `SwipeableTask.jsx:8-11,15-24`: `handleClick` and the row `onClick` are not gated by `authorized`; `authorized` only controls the label text (`:54-58`). Any caller passing `authorized={false}` would still toggle completion. All current callers pass `authorized={true}` (`CardDetailScreen.jsx:748,957,976,1091`), so this is a latent contract bug, not currently exploitable.
+- **Medium** — `SettingsScreen.jsx:29-39` `URL.revokeObjectURL(url)` is called synchronously immediately after `a.click()` (`:37-38`), and the `<a>` is never appended to the DOM. Revoking before the browser starts reading the blob can abort the download in some browsers.
+- **Low** — `AdminScreen.jsx:76` optimistic employee insert derives fallback initials `newEmp.name.slice(0,2)` for local state, but the POST body (`:72`) sent the value that may have been blank. Local row can diverge from server until reload.
+- **Low** — `AdminScreen.jsx:112-113` `labelToKey` can return a leading/trailing underscore or an empty string for punctuation-only labels; `createItem` only checks that the raw label is truthy (`:116`), so an empty `item_key` can be POSTed.
+- **Low** — `AdminScreen.jsx:124,130` `sort_order: items.length + 1` counts all items across categories and uses the pre-update length; concurrent adds can produce duplicate sort orders.
+- **Low** — `CustomerViewScreen.jsx:90` `statusIdx` is computed and never used (dead code).
+- **Low** — `CustomerViewScreen.jsx:60-69` effect has `[]` deps but reads `card`; if the `initialCard` prop changes the component never refetches/re-renders from it.
+- **Low** — `MapScreen.jsx:55,144` if `view` is `'grid'`/`'boathouse'` but the filtered data becomes empty after a refetch, execution falls through to the list branch (`:186`) while `view` remains stale, so the toggle chips no longer reflect the shown view.
+- **Low** — `Icon.jsx:2-116` every icon literal hardcodes `width={20} height={20}`; `Icon.jsx:119-124` sets only the wrapper `<span>` to `size`, so the `size` prop does not scale the SVG. All 30+ call sites passing `size={12|14|16|17}` render a 20px icon in a smaller box (overflow).
+
+## Permissions
+
+- **Medium** — `AdminScreen.jsx` has no role check of any kind (it doesn't consume `AuthCtx`; imports are only ToastCtx/NavCtx, `:1-6`), and `AppShell.jsx:108` renders it for any authenticated role. Non-admin roles can reach the screen via navigation and are shown employee/PIN, assignment, item, product, and export controls. The Settings links are admin-gated (`SettingsScreen.jsx:85-112`), so it's reachable mainly via history/deep state, but there is no client-side guard.
+- **Low** — Inconsistent assignable roles: `AdminScreen.jsx:303` allows `mechanic`, `cleaner`, and `admin`; `BoatsScreen.jsx:39` allows only `mechanic` and `cleaner`. An admin assignable in one UI is absent from the other.
+- **Low** — `BoatsScreen.jsx:239` has `title="Assign mechanic"` but the picker also lists cleaners; label is misleading. (Icon-only edit `:244` and delete `:257` have no `title`/`aria-label` at all.)
+
+## UX / A11y
+
+- **High** — `SettingsScreen.jsx:143-145` the version footer (rendered as plain "MARINA MANAGER v…") is actually a `<button>` that runs `clearCache`, which wipes all `marina_*` localStorage (including token/employee), deletes caches, unregisters service workers, and reloads (`:41-54`) — with no confirmation and no visible affordance that it is destructive. Accidental tap logs the user out and wipes local state.
+- **Medium** — Silent error swallowing via `.catch(() => {})` with no error UI: `AdminScreen.jsx:47,51,52,60,166`; `SettingsScreen.jsx:17,25`; `BoatsScreen.jsx:37,40,55`; `MapScreen.jsx:17`. A failed fetch is rendered identically to a genuinely empty list.
+- **Medium** — Loading misrepresented as empty: `MapScreen.jsx:10-18` has no loading flag and renders the "No Locations Set" empty state (`:194-199`) while the request is still in flight; same for `AdminScreen.jsx` tabs ("No items yet" `:379`, "No products yet" `:473`, "No assignments yet" `:315`).
+- **Medium** — Icon-only buttons without accessible name: `AdminScreen.jsx:325-327` (trash), `BoatsScreen.jsx:243-247` (edit), `BoatsScreen.jsx:248-259` (trash), `BoatsScreen.jsx:239-241` (assign, title only). No `aria-label`.
+- **Medium** — Non-keyboard-operable click targets built from `<div onClick>`: `AdminScreen.jsx:409` and `:495` (tap-to-edit rows), `MapScreen.jsx:91-102` (storage grid cells), `MapScreen.jsx:162-174` (boathouse slips), `SwipeableTask.jsx:15-24`. No `role`, `tabIndex`, or key handler.
+- **Medium** — Touch target below 44px: `MapScreen.jsx:99` storage cells use `minHeight: 28` and are tap-to-navigate.
+- **Medium** — `SettingsScreen.jsx:29-39` `handleExport` has no loading/disabled state or success feedback; repeated taps start multiple downloads, and failure uses a blocking `alert` (`:34`).
+- **Low** — `AdminScreen.jsx` employees tab renders an empty card with no empty-state text when `employees` is empty (`:270-285`), unlike the other tabs.
+- **Low** — `SettingsScreen.jsx:138-141` Sign Out has no confirmation.
+- **Low** — `AdminScreen.jsx:252` PIN `<input type="number" maxLength={4}>`: `maxLength` is ignored by most browsers for number inputs, and there's no `inputMode`, so the 4-digit constraint relies only on the JS check at `:69`.
+
+## Dark Mode (hardcoded colors)
+
+- **Low** — `AdminScreen.jsx:273` `color: '#fff'` on avatar.
+- **Low** — `SettingsScreen.jsx:76` `color="#fff"` check icon.
+- **Low** — `BoatsScreen.jsx:204` `color="#fff"` plus icon.
+- **Low** — `CustomerViewScreen.jsx:17` `'#888'` timeline dot fallback; `:99,102,157` `'#fff'`.
+- **Low** — `SwipeableTask.jsx:19` fixed `'rgba(136,136,136,.08)'` completed-row tint; `:44` `'#fff'`.
+  Most of these sit on colored backgrounds (`var(--primary)`, role/status colors) so they don't visually break, but they bypass the theme variables the rest of the app uses and won't adapt if those backgrounds change between themes.
+
+## Resource Leaks / Map Lifecycle
+
+- No leaks found in the listed files: `MapScreen.jsx` contains no map-library instance, interval, or DOM listener — it is purely a grid/list render over `cards` fetched once (`:14-18`), so there is no map instance to destroy. `BoatsScreen.jsx`, `SettingsScreen.jsx`, `SwipeableTask.jsx`, and `Icon.jsx` register no listeners/intervals. (For contrast, `App.jsx:40-42` registers an `appinstalled` listener with no cleanup, but that file was outside the requested set.)
+
+## Dead Code / Duplication / Hacks
+
+- **Low** — `SettingsScreen.jsx:53` `window.location.href = window.location.href` reload hack.
+- **Low** — `SettingsScreen.jsx:32-33` manually replicates the 401 logout in `api.js:17-21`; the raw `fetch` calls (`:17,22,30`) bypass `api()` and thus reimplement its auth/error handling instead of using it. `SettingsScreen.jsx:85-86,111-112` repeats the same `employee?.role === 'admin'` condition four times.
+- **Low** — `SwipeableTask.jsx` is named for a swipe gesture but implements click-to-toggle only (no touch handlers), a misleading/dead abstraction.
+- **Low** — `CustomerViewScreen.jsx:90` unused `statusIdx` (also listed under bugs).
+- No `TODO`/`FIXME`/`HACK` comments or commented-out code blocks found in any of the seven files.
+## 24/09/2026, 22:59:16
+
+Verified against `node_modules/tesseract.js/src/Tesseract.js` (v5.1.1), `src/api.js`, and repo-wide grep. Grouped findings below.
+
+## tesseract.js lifecycle — `ScanCardScanner.jsx`
+
+- **L215-222**: No Worker is created or terminated by this code; it calls the convenience `Tesseract.recognize()`. In tesseract.js@5.1.1 (`node_modules/tesseract.js/src/Tesseract.js`) that helper does `worker.recognize(image).finally(() => worker.terminate())`. The `finally` is attached to `recognize`, not `createWorker`, so if `createWorker` rejects (wasm/traineddata load failure), no `terminate()` runs and the partially-created worker leaks. The component holds no worker handle and cannot clean it up. **[High]**
+- **L215-222**: No worker reuse — every "Extract Text" tap creates a fresh worker and re-initializes the engine/language data. Repeated scans (retake loop) redo full init each time. **[Medium]**
+- **L210-250**: No cancellation/unmount guard. If the scanner unmounts (navigate away) mid-OCR, the recognition continues and `setOcrProgress` (L219), `setOcrText` (L224), `setForm` (L226), `setPhase` (L245), `setOcrLoading` (L249) fire after unmount. **[High]**
+- **L246-248 / L249**: Error is caught but `setOcrLoading(false)` is not in a `finally`; it only runs after the `catch` body completes. OCR failure isn't distinguished from load failure. **[Low]**
+- **L218-220**: `logger` only reacts to `m.status === 'recognizing text'`; language/wasm loading statuses are ignored, so the progress bar stays at 0% during first-load download while L423 says "Loading OCR engine (first time only)". Misleading progress. **[Medium]**
+- OCR input is the 1920x1080 camera capture (L170, L197), not an uploaded file, so unbounded user input / file-size DoS is not reachable here. No file input exists in this component at all. **[Low]**
+
+## Camera / getUserMedia — `ScanCardScanner.jsx`
+
+- **L158-165**: Cleanup does stop tracks on unmount — correct for the already-resolved case. **[OK]**
+- **L167-180 / L158-164**: If the component unmounts before `getUserMedia` resolves, cleanup (L160-164) runs before `streamRef.current` is assigned (L172), so the resulting stream is never stopped → camera stays on. **[High]**
+- **L207 and L374**: `setTimeout(startCamera, 100)` is never cleared on unmount; the timer can fire after unmount and open a stream that no cleanup will stop. **[High]**
+- **L173-176**: `videoRef.current.play()` returns a promise that is neither awaited nor caught → potential unhandled rejection (AbortError) and no verification the video is playing. **[Medium]**
+- **L177-179**: All failures collapse to one toast; no distinction of `NotAllowedError`/`NotFoundError`/`NotReadableError`/`OverconstrainedError`; no retry affordance; no `navigator.mediaDevices` guard (insecure context → TypeError caught as generic). **[Medium]**
+- **L170**: Assumes `facingMode:'environment'` + 1920x1080 ideal; desktop/front-only devices may fail or silently ignore. No torch/zoom controls despite the low-light instruction (L394). No torch/zoom API calls exist. **[Low]**
+- **L189-197**: `capturePhoto` never checks `video.videoWidth/videoHeight > 0`; if metadata isn't loaded the canvas is 0x0 and `toDataURL` yields `"data:,"`, which is then stored (L198) and later OCR'd/uploaded (L331-337). **[Medium]**
+- **L384**: `<video>` has no `autoPlay` and no `aria-label`. **[Low]**
+
+## QR decoding / file input / image validation
+
+- No QR decoding exists anywhere in the audited files; `qr-code-styling` is used only to *generate* QR codes in `QrCode.jsx`. No `BarcodeDetector`/`jsQR`/decode path. If QR scanning was intended in `ScanCardScanner`, it is not implemented. **[Medium]**
+- No `<input type="file">` and no image type/size validation in any of the three files. **[Low]**
+
+## Async races, missing awaits, state-after-unmount
+
+- **L252-258**: Customer search fetches on every keystroke (no debounce); responses can resolve out of order and overwrite newer results; no unmount guard. **[Medium]**
+- **L254**: `.catch(() => {})` swallows search errors, making failures indistinguishable from "no results". **[Low]**
+- **L262**: `selectCustomer`'s `api('GET', /customers/${c.id})` has no `.catch` → unhandled promise rejection; no unmount guard or race handling on rapid selection. **[Medium]**
+- **L410-415 vs L203-208**: "Retake" is not disabled while `ocrLoading`. A user can retake during OCR; the in-flight `runOcr` then overwrites `form`, `receivedItems`, `authorizedWork`, and `phase='edit'` (L226-245) from the discarded image. **[High]**
+- **L304-343**: `createCard` is non-atomic. If items (L320), work (L328), or photo (L337) fail after the card is created (L304), the catch reports "Failed to create card" though the card exists; retry creates a duplicate. No rollback/idempotency. **[High]**
+- **L340-343**: `navigate('card', …)` (L341) then `setSaving(false)` (L343) → state update after navigation/unmount. Same pattern at L277 and L296. **[Medium]**
+
+## Double `/api` prefix
+
+- No `api(..., '/api/...')` calls exist in the three audited files; all paths are prefix-free (e.g., `ScanCardScanner` L254, L262, L269, L285, L304, L320, L328, L337; `NewLogScreen` L62; `NewCardScreen` L39, L41, L46, L72, L102, L112). **[Negative — confirmed clean]**
+- The bug does exist elsewhere in the repo: `src/screens/BoatsScreen.jsx:252` (`api('DELETE', /api/boats/...)`) and `src/screens/CustomersScreen.jsx:79` (`api('DELETE', /api/customers/...)`) both double-prefix to `/api/api/...` → 404. Outside the audited files, flagged because context mentioned it. **[High]**
+
+## Form validation / destructive actions / loading / empty / error states
+
+- **ScanCardScanner L575-595 vs L304-313**: The editable Card Details fields `motor_type`, `boat_name`, `licence`, `phone`, `length` are never sent by `createCard`; they are only used when creating a *new* boat (L285-293). Edits to these fields when an existing boat is selected are silently discarded. **[High]**
+- **ScanCardScanner L71**: The regex `[\u2713\u2714\sv]` includes `\s`, so any item-label line containing whitespace matches the "checked" branch; many received items get marked `true` regardless of the actual mark. **[Medium]**
+- **ScanCardScanner L104-107**: Fallback work-order extraction scavenges any 5-6 digit run from the entire OCR text (phones, dates, prices) → false work-order numbers. **[Medium]**
+- **ScanCardScanner L60-61**: Length regex matches any two-digit number, easily misparsed; **L96-101** date regex assumes M/D/YY and never validates `m<=12`, can emit invalid dates. **[Low]**
+- **NewCardScreen L76-84**: The 409 duplicate-customer path is dead code. `api()` (`src/api.js:23-26`) throws a plain `Error` with no `.status` or `.response`, so `e.status === 409` (L76) is always false and `e.response?.id`/`e.response.id` (L78, L80) can never be populated. **[High]**
+- **NewCardScreen L41 and L159**: Fetch failure is swallowed, so a network error renders the "No customers found" empty state; no error state. **[Medium]**
+- **NewCardScreen L46-49 / L112 / L239**: Work-order-number fetch failures are swallowed; the field displays "—" and `createCard` still POSTs the empty `work_order_no` from `...cardForm` with no validation. **[Medium]**
+- **NewCardScreen L158-169 / L214-227**: No loading indicator while customers/boats are fetching; the empty-state text flashes before data arrives. **[Medium]**
+- **NewCardScreen L112 vs L263**: `wrap_required` is a boolean spread into the POST body, while the codebase otherwise converts booleans to 1/0 (`is_fake: isFake ? 1 : 0` L112; `ScanCardScanner` L312 `is_scanned: 1`). Potential type mismatch. **[Medium]**
+- **NewCardScreen L317-319**: Destructive "Create FAKE Service Card" fires immediately on one tap with no confirmation dialog. **[Medium]**
+- **NewLogScreen L59**: Save is not disabled while `recording`; saving mid-recording uses possibly-interim `transcript` (L64), and the later `onend`/`onresult` writes to an unmounted component. **[Medium]**
+- **NewLogScreen L62**: `params.cardId` is unvalidated → requests `/cards/undefined/logs` if the route param is absent. **[Medium]**
+- **NewLogScreen L65-69**: `parts.filter(p => p.product)` silently drops rows that have a quantity but no product, with no user warning. **[Medium]**
+- **NewLogScreen L117-118**: Quantity is unvalidated; `min="0.1"` is not enforced on save — empty/negative values are sent as-is (L68). **[Medium]**
+- **NewLogScreen L24-26**: Dirty flag ignores `transcript`, so a navigate-away with only an unappended voice note won't warn. **[Low]**
+- **NewLogScreen L71-75**: `setSaving(false)` after `goBack()` (unmount); catch discards the server message; no `finally`. **[Medium]**
+- **NewCardScreen L109-118**: `setSaving(false)` after `navigate` (L115-117); no `finally`. **[Low]**
+- **NewCardScreen L222 / L235**: `{boat.motor_type} · {boat.model} · {boat.licence}` render literal `undefined` when null, with no fallbacks (contrast `ScanCardScanner` L524). **[Low]**
+
+## a11y / touch targets / text overflow
+
+- **ScanCardScanner L470-474, L522-526; NewCardScreen L161-169, L218-226**: Customer/boat rows are `<div onClick>` with no `role`, `tabIndex`, or keyboard handler — not keyboard accessible. **[Medium]**
+- **NewLogScreen L119-121**: Icon-only trash button has no `aria-label`; **L117** quantity input has no label. **[Medium]**
+- **ScanCardScanner L461-467**: Search input has placeholder only, no label/`aria-label`. **[Low]**
+- **ScanCardScanner L505, L561**: "Change" chip with `fontSize:11` / `width:auto` yields a sub-44px touch target. **[Low]**
+- **ScanCardScanner L502, L558; NewCardScreen L164, L221**: Long names in Bebas Neue have no ellipsis/overflow handling and can overflow the row. **[Low]**
+
+## TODO/FIXME/dead code/duplication
+
+- No `TODO`/`FIXME`/`HACK`/`XXX` comments exist in the audited files (repo-wide grep clean). **[Negative]**
+- **ScanCardScanner L125 / L440**: `showRawOcr` is declared and read but never set (no `setShowRawOcr` call anywhere), so the `<summary>` always renders "Show Raw OCR Text". Dead state with misleading UI. **[Medium]**
+- **ScanCardScanner L115**: `employee` from `AuthCtx` is destructured but never used. **[Low]**
+- **NewCardScreen L68-90**: Function body indentation is inconsistent (declared at column 0, body indented 5 spaces). Cosmetic. **[Low]**
+- **Duplication**: Customer search/select, create-customer, create-boat, and select-boat flows are duplicated between `ScanCardScanner.jsx` (L252-297) and `NewCardScreen.jsx` (L37-107) with divergent behavior (409 handling only in NewCardScreen; different boat fields; different validation). **[Medium]**
+## 24/09/2026, 23:00:24
+
+Audit complete. Findings below, grouped by category with `file:line` and one-line repro/description.
+
+## 1. Correctness / bugs
+
+- [High] `src/screens/CardDetailScreen.jsx:472,572,824` — `work` state is initialized from `card.authorized_work` once via `useState`; there is no `useEffect` re-syncing it to the refreshed `card`. Repro: trigger an API error on toggle → `catch` calls `showToast` + `reload()`, but the optimistic row stays toggled (rollback via `reload()` is ineffective). Same class in `toggleUnwrap` at `:826-835` (no revert at all).
+- [High] `src/screens/CardDetailScreen.jsx:103-120,694-716,841-863` — invoice `GET` failure is swallowed to `{ items: [] }` (`.catch(() => ({ items: [] }))`) and the following `PUT` overwrites the entire invoice. Repro: complete a task while `GET /cards/:id/invoice` fails → invoice is replaced with only the new item(s). Data-loss bug.
+- [High] `src/screens/CardDetailScreen.jsx:1286,1297 vs 1240` — double `checklist_` prefix: `catPhotoKey` is already `checklist_<slug>`, then `uploadCatPhoto` appends `checklist_` again (`photo_type = \`checklist_${cat}\``). Repro: upload a checklist category photo → stored as `checklist_checklist_<slug>`, never equals `catPhotoKey` used at `:1287`, so it never displays.
+- [Medium] `src/screens/CardDetailScreen.jsx:1454-1471` — `InvoiceTab` effect has no cancellation/unmount guard; nested `/next-invoice-number` fetch at `:1464-1467` is un-awaited and also unguarded. Repro: switch tabs before invoice loads → setState after unmount.
+- [Medium] `src/screens/CardDetailScreen.jsx:1221-1232` — `saveChecklist` optimistically updates `localChecklists`; on error it calls `reload()` but never rebuilds local state from `card.checklists`, so a failed save stays visible. Repro: force POST error → checklist still shows saved.
+- [Medium] `src/screens/CardDetailScreen.jsx:1210-1219` — `setNote` calls `saveChecklist` (a POST) on every keystroke with no debounce; concurrent out-of-order POSTs can persist stale `items_json`.
+- [Medium] `src/screens/CardDetailScreen.jsx:170-180` — `InfoTab.save` builds `storage_location` only when a sub-field is present and sends `storage_type: ''` when cleared; server `COALESCE` (`server.js:683-699`) then keeps `''` type but retains the old `storage_location`. Repro: clear storage type and save → type blank, old location remains.
+- [Medium] `src/screens/CardDetailScreen.jsx:1486-1499` — `updateItem` accepts `Number('')` → `NaN` totals (`$NaN`), and `value={item.quantity || 1}` (`:1691`) makes a 0 display as 1. Repro: clear the Qty field.
+- [Medium] `src/screens/CardDetailScreen.jsx:182` — `save` spreads `{ ...form }`, sending the UI-only `location_notes` (not a column) plus read-only `work_order_no`/`invoice_number`.
+- [Low] `src/screens/CardDetailScreen.jsx:603` — `toggle` has a dead `if (field === 'notes') return` branch; `toggle` is only ever called with `'completed'` (notes go through `saveNotes` at `:629`).
+- [Low] `src/screens/CardDetailScreen.jsx:753-756,981-984` — first tap on an uncompleted task only calls `addProduct` (no completion), so "TAP TO COMPLETE" requires two taps. Repro: tap task with no product inputs → nothing completes.
+- [Low] `src/screens/CardDetailScreen.jsx:438-443` — received-item toggle has no in-flight guard; rapid taps issue overlapping `PUT /items`.
+- [Medium] `src/components/ProductAutocomplete.jsx:51-52` — debounce `setTimeout` is never cleared on unmount (only the `mousedown` listener is cleaned at `:85`); pending `search()` calls setState after unmount. No abort → stale results can overwrite a newer query (`:38-40`).
+
+## 2. Resource leaks
+
+- [Medium] `src/components/ProductAutocomplete.jsx:52` — uncleared `setTimeout` (leak / post-unmount setState).
+- [None found in CardDetailScreen.jsx] — no `setInterval`/`addEventListener`/object URLs/camera/Tesseract workers are created in this file; `captureGPS` (`:18-35`) uses a self-resolving geolocation promise.
+
+## 3. React performance
+
+- [Medium] `src/screens/CardDetailScreen.jsx:1799-1842` — `getTabBadge` runs for every tab on every render and `JSON.parse`s checklist `items_json` on each call (`:1820,1828,1836`), unmemoized.
+- [Medium] `src/screens/CardDetailScreen.jsx:1884-1885` — `getStageStatus`→`isStageComplete` re-parses checklist JSON per status chip per render (`:48,57,67`), unmemoized.
+- [Medium] `src/screens/CardDetailScreen.jsx:1752-1762` — `serviceItems`, `cleaningTemplates`, `cleaningGroups`, `cleanKeys`, `authSet` are rebuilt (new identities) every parent render and passed to child tabs; no `useMemo`/`React.memo`.
+- [Low] `src/screens/CardDetailScreen.jsx:742-745,973,1269` — per-row `JSON.parse`/`filter` of photos/params inside `.map` on every render.
+- [Low] `src/screens/CardDetailScreen.jsx:528,889,1093` etc. — widespread inline arrow handlers with no memoized children.
+- No unkeyed large lists found; all `.map` calls inspected supply `key`.
+
+## 4. UX
+
+- [High] `src/screens/CardDetailScreen.jsx:1742-1743,1792` — `reload` swallows errors (`.catch(() => {})`); on failure `card` stays `null` and only an infinite shimmer renders; no error state/retry.
+- [Medium] `src/screens/CardDetailScreen.jsx:1748-1749` — templates fetch failure is silent; Authorized tab shows no tasks even when the card has authorized work.
+- [Medium] `src/screens/CardDetailScreen.jsx:1455-1470,1591` — invoice load error is indistinguishable from empty invoice; user sees "No invoice items" and a subsequent save PUTs an empty invoice.
+- [Medium] `src/screens/CardDetailScreen.jsx:1292-1295` — icon-only "Photo" button lacks `aria-label`; same for trash `:1145`, `&times;` remove buttons `:772,1000,1684`, print `:1986`.
+- [Medium] `src/screens/CardDetailScreen.jsx:1425-1438` — fullscreen modal has no Escape handler/focus trap/`role="dialog"`; the DELETE button (`:1431`) closes the modal regardless of the confirm at `:1383` and triggers a second confirm.
+- [Low] `src/screens/CardDetailScreen.jsx:528` — toggle switch is 44×26px (height below the 44px touch target); other tiny hit areas at `:791,1000`.
+- [Low] `src/screens/CardDetailScreen.jsx:1863-1872,1884-1906` — status stages can be jumped/advanced/retreated with no confirmation for irreversible transitions (e.g., to `invoiced`/`archived`).
+- [Low] `src/screens/CardDetailScreen.jsx:1038-1053,1200-1219` — no success feedback for storage/pickup/checklist saves (only failure toasts), unlike InfoTab's "Saved" at `:184`.
+- [Low] `src/screens/CardDetailScreen.jsx:232,1878,415-421` — long address/boat name/remarks have no truncation or wrap guards (overflow risk).
+
+## 5. TODO / duplication / long functions
+
+- [Low] `src/screens/CardDetailScreen.jsx:691-720 vs 838-867` — `addCompletedToInvoice` is near-duplicated; `toggle` duplicated at `:578-627 vs 869-916`; products-parse duplicated at `:585-591,744,876-882,973`; price-map duplicated at `:110-112,696-698,843-845`.
+- [Low] `src/screens/CardDetailScreen.jsx:569-819,1443-1727,1799-1842` — very long units (file is 2018 lines; `ServiceWorkTab` ~250 lines, `InvoiceTab` ~285).
+- [Low] `src/screens/CardDetailScreen.jsx:32` — `console.log('GPS not available', ...)` left in the production path.
+- No `TODO`/`FIXME`/`HACK` or commented-out code found in this file.
+
+## 6. Role / permission checks
+
+- [Medium] `src/screens/CardDetailScreen.jsx:1344,1409-1438` — `PhotosTab` receives no `canEdit`/role and `deletePhoto` has no role check; the READ-ONLY banner (`:1910`) does not prevent a non-assigned worker from uploading/deleting photos. Backend `server.js:924` `DELETE /api/photos/:id` is `requireAuth` with no ownership check.
+- [Medium] `src/screens/CardDetailScreen.jsx:1124` — "Add Work Entry" is shown regardless of `canEdit`; reads as read-only but still allows logging. Backend `server.js:907` `DELETE /api/logs/:id` also has no ownership check (UI restricts to admin/owner at `:1144`).
+- [High] `src/screens/CardDetailScreen.jsx:1047-1053` — `setPickupDelivery` sends `pickup_delivery`, which `server.js:661` protects; non-editor roles always get 403 but the control is shown unconditionally (`canEdit` only excludes non-assigned workers).
+- [Low] `src/screens/CardDetailScreen.jsx:1863-1872` — `status` is not in the server's protected-key list (`server.js:661`), so any role can set any status via the chips at `:1884-1906`, bypassing the gated advance/retreat buttons.
+- [Low] `src/screens/CardDetailScreen.jsx:1739` — `params.isAssigned` defaults to `true`; opening the screen without it (e.g., from search) grants workers edit rights (`:1740`).
+
+## Related, outside the two requested files (double `/api` prefix)
+
+- [Critical] `src/screens/CustomersScreen.jsx:79` — `api('DELETE', '/api/customers/${c.id}')` → api() prepends `/api`, producing `/api/api/customers/...` (404).
+- [Critical] `src/screens/BoatsScreen.jsx:252` — `api('DELETE', '/api/boats/${b.id}')` → same double prefix (404).
+- Note: I found **no** double-prefix `api()` calls inside `CardDetailScreen.jsx`; every `api(...)` path there starts with `/` without `/api`, and raw `fetch('/api/...')` calls (`:200,673,1244,1362`) are direct fetches that do not go through `api()`.
+
+## Possibly-impactful backend mismatch (not a frontend file)
+
+- [Medium] `server.js:938` — checklist completion (`allDone`) only treats values as done when `v === true`, but fall/spring items are stored as `{ rating, notes }` objects (`CardDetailScreen.jsx:1205,1216`), so `completed_at`/assignment cleanup never triggers for those checklists. Flagging because the client shapes the data; I did not fully trace the assignment flow.
+## 24/09/2026, 23:00:36
+
+Let me independently verify the highest-impact claims (SQLite startup, double-prefix, gitignored data) rather than trust the summaries.
+## 24/09/2026, 23:01:28
+
+I've completed the read-only reconnaissance (A0–A7 mining). Plan mode blocks the one write this task needs (`.opencode/review-summary.md`), so here is the plan + what my recon already proved.
+
+## Plan-mode conflict
+The only file this audit writes is the running summary. Everything else is read-only. I need your call on how to deliver findings.
+
+## A0 — Architecture (verified map)
+- Entry: `src/main.jsx` (version-check → wipe cache → render) → `src/App.jsx` (query `?wo=` → public card, else Auth gate) → `src/AppShell.jsx` (stack-based nav + dirty-guard).
+- Flow: screens → `src/api.js::api()` (adds `/api`, Bearer from `localStorage`) → `server.js` routes → `db/index.js` picks `db/sqlite.js` (no `DB_HOST`) or `db/mysql.js`.
+- State: `AuthCtx` (employee in localStorage), `ThemeCtx` (body classes), `ToastCtx`, `NavCtx`. No data layer — every screen fetches and holds its own state; `CardDetailScreen.jsx` (2018 lines) is the god-component and auth logic for cards lives in the UI.
+
+## Preliminary confirmed findings (from recon, not yet written up)
+- **[Critical] `server.js:29` + `db/backup.js:24`** — default (SQLite) boot crashes: `runBackup` queries `information_schema`, which SQLite can't prepare. I verified: `THROWS: no such table: information_schema.tables`. Boot aborts at `await runBackup(db)` unless `backup/<today>.sql` already exists. Same MySQL-only assumption breaks `/api/export` (`server.js:1039`) on SQLite.
+- **[Critical] `src/screens/CustomersScreen.jsx:79`, `src/screens/BoatsScreen.jsx:252`** — `api('DELETE', '/api/...')` double-prefixes to `/api/api/...` → delete customer & delete boat always 404. Confirmed by reading both.
+- **[Critical] `server.js:268-280`** — 4-digit PIN, unsalted `sha256` (`server.js:203,237`), no rate limit → full keyspace (10k) brute-forced in seconds.
+- **[High] `server.js:222` + `server.js:228-235`** — `/photos` served with no auth; multer keeps the attacker's extension (`path.extname(originalname)`) → upload `.html`/`.svg` → stored XSS.
+- **[High] IDOR: `server.js:548,907,924`** — any authenticated role can delete any boat assignment, work log, or photo; no ownership check.
+- **[High] `server.js:712-718`** — `toMysqlDateTime` omits the space between date and time → malformed timestamps written.
+- **[High] `db/mysql.js:42-53`** — MySQL engine has no schema bootstrap (never runs `schema.sql`, which is SQLite-only syntax) → fresh MySQL deploy has no tables.
+- **[High] `src/components/Icon.jsx:3`…** — every SVG hardcodes `width/height=20`; `size` only sizes the wrapper → all icon sizes wrong.
+- **[Medium] `tailwindcss`/`autoprefixer`/`postcss` installed but `tailwind.config.js`/`postcss.config.js` are empty and nothing imports them** → dead deps.
+
+## Proposed phased execution
+1. **A0–A2** — finish bug sweep + manual flow matrix (login, create card, scan OCR, upload, edit/delete, customer CRUD, admin, offline).
+2. **A3** — DB parity/transactions/injection/backup.
+3. **A4** — security write-ups with exploits (authz matrix per route).
+4. **A5** — per-screen UX/a11y pass (loading/empty/error, touch targets, ARIA, dark-mode parity, PWA).
+5. **A6–A8** — scalability, perf, release readiness.
+6. **Rollup** — Top-20 backlog, scorecard, classification, 3 systemic fixes.
+Each phase appends to `.opencode/review-summary.md` immediately (per your format), with running C/H counts.
+
+Before I start, three decisions:
+## 24/09/2026, 23:04:51
+
+Proceeding: MySQL-only production, internet-facing. I'll run the angles and append to `.opencode/review-summary.md` after each. A few final verifications first.
+## 24/09/2026, 23:05:06
+
+No tests, lint, CI, or transactions exist anywhere — confirmed. Also confirmed: `.opencode/logs/*` (2.9 MB of session logs) and `data/local.db-wal/-shm` are git-tracked. Writing the phased summary now.
+## 24/09/2026, 23:05:16
+
+The harness still enforces plan mode: edits are denied except `.opencode/plans/*.md`. I'll write the running summary there instead of `.opencode/review-summary.md` (same content), then tell you at the end. Proceeding phase by phase.
+## 24/09/2026, 23:05:40
+
+I'll explore the settings implementation first to give grounded suggestions.
+## 24/09/2026, 23:05:43
+
+I'll start by exploring the codebase structure and locating settings-related files.
+## 24/09/2026, 23:05:51
+
+Now let me examine the app architecture, navigation, and existing UI patterns.
+## 24/09/2026, 23:06:03
+
+Now let me look at the tab pattern in AdminScreen, the modal pattern, constants, and confirm whether Tailwind is actually used.
+## 24/09/2026, 23:06:36
+
+# Settings UI Exploration Report
+
+## 1. Where the Settings UI lives
+
+| File | Role |
+|---|---|
+| `D:\Desktop\marine\src\screens\SettingsScreen.jsx` | **The Settings screen** — 148 lines, exported as `SettingsScreen`. Thin wrapper only. |
+| `D:\Desktop\marine\src\screens\AdminScreen.jsx` | Admin sub-settings (Employees, Assignments, Items, Products). Navigated to from Settings with `{ tab }`. |
+| `D:\Desktop\marine\index.html` | **All CSS** lives here in a single `<style>` block (lines 24–1086). No `.css` files exist in `src/`. |
+| `D:\Desktop\marine\src\constants.js` | `THEMES`, `THEME_PREVIEW_COLORS`, `ROLE_COLORS` consumed by Settings. |
+
+Registered in `src\AppShell.jsx:107` (`case 'settings': return <SettingsScreen />`) and reached via bottom nav item `{ key: 'settings', label: 'Setup', icon: 'settings' }` (`AppShell.jsx:23`).
+
+## 2. Current structure
+
+It is a **single long scrolling page** — a bare `<div>` with sections separated by `.section-head` labels and `.card` containers. There is **no** section component, no tabs, no accordion; each section is written inline. Framework: **React 19.2** (plain, no TypeScript, no router).
+
+The top-level return (`SettingsScreen.jsx:56–147`) is literally:
+
+```jsx
+return (
+  <div>
+    <div className="section-head">Theme</div>
+    <div className="day-night-toggle"> ... </div>
+    <div className="theme-grid"> {THEMES.map(...)} </div>
+
+    {employee?.role === 'admin' && <div className="section-head">Lists</div>}
+    {employee?.role === 'admin' && (
+      <div className="card" style={{ margin: '0 12px' }}>
+        <button onClick={() => navigate('admin', { tab: 'employees' })} style={{...}}> Employees › </button>
+        ...
+      </div>
+    )}
+
+    {employee?.role === 'admin' && <div className="section-head">Export</div>}
+    ...
+    <button onClick={logout} className="sign-out-btn"> ... </button>
+    <button onClick={clearCache} ...>MARINA MANAGER v{version} ...</button>
+  </div>
+)
+```
+
+Each `.card` row is a full-width `button` with an inline-styled flex layout (icon + Barlow Condensed label + `›` chevron) — repeated four times at lines 88–107. Good candidate for extraction.
+
+## 3. Settings sections (in render order)
+
+1. **Theme** (`:58–83`) — global Day/Night toggle + 2-col `.theme-grid` of 4 `.theme-card`s (Deep Water, Sunset Harbour, Storm Watch, Coral Bay).
+2. **Lists** (admin only, `:85–109`) — links to Admin tabs: Employees, Assignments, Items (`authorized_items`), Products.
+3. **Export** (admin only, `:111–136`) — "Export Database (ZIP)" + recent backups list.
+4. **Sign Out** (`:138–141`) — `.sign-out-btn`.
+5. **Version footer / Clear cache** (`:143–145`) — cache wipe + hard reload.
+
+## 4. Styling approach
+
+**Plain global CSS + CSS custom properties + inline styles.** NOT Tailwind, NOT CSS modules, NOT styled-components.
+
+- Tailwind is a devDependency with an **empty config** (`tailwind.config.js` = `module.exports = {}`), no `@tailwind` directives, no CSS import, no utility classNames anywhere. It is effectively unused.
+- All styles are in `index.html` `<style>`, organized by theme classes on `<body>` (`.theme-{id}` + `.light`/`.dark`) and CSS vars (`--bg`, `--surface`, `--accent`, `--text2`, `--border`, `--r`).
+- Key reusable classes: `.card` (`index.html:256`), `.section-head` (`:265`), `.sign-out-btn` (`:273`), `.theme-grid`/`.theme-card` (`:810`), `.day-night-toggle`/`.dnt-btn` (`:843`), `.tabs`/`.tab` (`:439`), `.chip` (`:360`), `.modal-overlay`/`.modal-sheet` (`:1051`).
+- Many components also use long inline `style={{}}` objects (e.g. `SettingsScreen.jsx:88–107`) — this is the dominant pattern in newer code.
+
+## 5. Reusable patterns already in the codebase
+
+**Tab bar (classic underline)** — `src\screens\CardDetailScreen.jsx:1990–2004`, backed by `.tabs`/`.tab` CSS at `index.html:439`:
+```jsx
+<div className="tabs" style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
+  {tabs.map((t) => (
+    <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+      {t.label}
+    </button>
+  ))}
+</div>
+```
+`tabs` array defined at `CardDetailScreen.jsx:1850`; panels rendered with `{tab === 'info' && <InfoTab .../>}` (`:2006`).
+
+**Chip-style tab bar** — `src\screens\AdminScreen.jsx:228–234` (state `const [tab, setTab] = useState(params.tab || 'employees')` at `:15`):
+```jsx
+{['employees','assignments','authorized_items','products'].map((t) => (
+  <button key={t} className={`chip ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>{t}</button>
+))}
+```
+`.chip` / `.chip.on` CSS at `index.html:360`.
+
+**Bottom-sheet modal** — `src\components\ConfirmLeaveDialog.jsx:3–19` using `.modal-overlay` + `.modal-sheet` + `.modal-handle` + `.modal-title` (CSS `index.html:1051`). Also used centered at `BoatsScreen.jsx:267` and `CardDetailScreen.jsx:1426`.
+
+**Accordion/disclosure** — none exists. The closest is boolean show/hide toggles (e.g. `AdminScreen.jsx:239` `setShowNew(!showNew)`); no dedicated collapsible component.
+
+**Sticky header** — `.sticky-top` class (`index.html:1045`), used in `CardsScreen.jsx:70`.
+
+## 6. App architecture
+
+- **State management:** React Context only. Providers nest in `App.jsx:76–85`: `ThemeProvider` → `AuthProvider` → `ToastProvider`. Contexts in `src\contexts\`: `ThemeCtx.jsx` (theme + darkMode, persisted to `localStorage`, toggles `<body>` classes), `AuthCtx.jsx` (employee/auth), `ToastCtx.jsx`, `NavCtx.jsx`.
+- **Routing:** No React Router. A hand-rolled **screen stack** in `src\AppShell.jsx` (`screenStack` state `:28`, `navigate`/`goBack` at `:77`/`:86`, integrated with the History API `pushState`/`popstate` `:47–64`). Screens are selected by a `switch (current.screen)` at `:98–113`. Settings is a top-level stack entry; Admin is pushed as a separate screen with params.
+- **Data:** `fetch` against an Express backend (`server.js`, MySQL/`better-sqlite3`); token in `localStorage` via `src/api.js`; no client-side query/cache library.
+- **PWA:** service worker (`src/sw.js`) + `vite-plugin-pwa`; `main.jsx` handles version-based cache clearing.
+
+## Notes for a Settings refactor
+
+- The screen is small (148 lines) and has clear section boundaries, but every list row duplicates the same inline-styled `<button>` — extract a row component or reuse `.card` + a row class.
+- For tabs, reuse `.tabs`/`.tab` (CardDetailScreen is the canonical example) if you want horizontal underline tabs; use `.chip` (AdminScreen) for a compact pill bar.
+- New styles must go in the `index.html` `<style>` block since no CSS module/Tailwind pipeline is active; or follow the existing inline-style convention.
+## 24/09/2026, 23:06:52
+
+## Diagnosis (honest)
+
+`SettingsScreen.jsx` is only 148 lines / 5 sections — not truly monolithic yet, but it *feels* heavy because:
+- Admin-only sections silently appear/disappear (users can't tell what's available).
+- Every list row is a duplicated inline-styled `<button>` (`SettingsScreen.jsx:88-107`) — no shared row component.
+- Theme grid + Lists + Export + Sign Out + version footer ≈ 1.5 phone screens, with no visual grouping hierarchy beyond `.section-head`.
+- Accessibility gaps: no `aria-label`s, no `role="switch"` on day/night, emoji used as icons (`:104`), and clear-cache is a text-only `<button>`.
+
+## Options & tradeoffs
+
+**A. Grouped list (iOS-Settings style)** — *recommended baseline*
+Collapse 5 sections into 3 labeled groups: **Appearance** (theme/day-night), **Management** (admin: Lists/Export), **About** (version, cache, sign out). Turns a flat scroll into a scannable hierarchy. Lowest effort, best accessibility. ← best value.
+
+**B. Basic / Advanced progressive disclosure** — *recommended, cheap*
+You already gate on `role === 'admin'`. Extend it: everyone sees Appearance + Sign Out; admin tools + Export + Clear cache + backups live under an "Advanced" expander (collapsed by default). This is the highest-ROI change for "accessibility" in the sense of *not overwhelming users*. Reuses existing boolean-toggle pattern.
+
+**C. Tabs per section** — *defer*
+The codebase has two ready patterns: `.tabs`/`.tab` (`CardDetailScreen.jsx:1990`) and `.chip` (`AdminScreen.jsx:228`). But with only 5 sections, tabs add navigation cost and hide content you could otherwise scan at a glance. Worth it only above ~6 sections.
+
+**D. Stacked cards (wallet deck)** — *recommend against for settings*
+Visually cool, but you only see the top 1–2 cards, it requires learning, and it's hostile to screen readers, keyboard nav, and deep-linking. Settings are visited rarely — findability beats delight. Fine as a showcase, wrong for this screen.
+
+## Accessibility specifics to include in any option
+- Real `<button role="switch" aria-checked>` for day/night; `aria-label` per theme card.
+- Replace emoji icons (`:104`, `:126`) with the existing `<Icon>` set.
+- 44px min touch targets; visible focus rings; respect `prefers-reduced-motion`.
+- Semantic headings (`<h2>`) instead of styled `<div className="section-head">`.
+
+**My recommendation:** A + B combined — grouped list, with admin/advanced tools behind one collapsed "Advanced" expander. Skip tabs and the card stack until the screen genuinely grows.
+
+Which direction do you want before I write the plan?
+## 24/09/2026, 23:10:02
+
+Audit complete. All 9 angles ran; the running summary is at `.opencode/plans/review-summary.md`.
+
+**Why not `.opencode/review-summary.md`:** the harness kept plan mode active and denied every edit path except `.opencode/plans/*.md` (I attempted your requested path first; it was rejected). Same content, different location.
+
+## Headline results
+- **Tally: 5 Critical, 30 High.**
+- **Classification: MVP, not Production Ready.** Scorecard ≈ 2.9/10.
+- **Fix first (single highest risk):** the PIN auth stack — `server.js:268-280` (no rate limit/lockout), `:237-239` (unsalted SHA-256), `:202-205` (seeded `Admin/0000`). 10k requests = admin takeover, and it unlocks the two XSS chains.
+
+**5 Criticals:**
+1. Brute-forceable/default 4-digit PIN login.
+2. Upload keeps attacker extension → stored XSS via `/photos` (`server.js:228-235,222`).
+3. Stored XSS in print windows via unescaped `document.write` (`CardDetailScreen.jsx:1531,1948`).
+4. `api('DELETE','/api/...')` double-prefix → customer & boat delete always 404 (`CustomersScreen.jsx:79`, `BoatsScreen.jsx:252`).
+5. Invoice overwritten after a swallowed GET failure → silent financial data loss (`CardDetailScreen.jsx:103-120,694-716`).
+
+**Three systemic fixes:** (1) real MySQL schema + versioned migrations, delete the SQLite shim; (2) move authz/validation/business rules to the API boundary; (3) add tests + lint/typecheck + CI + monitored, tested backups.
+
+**Standout non-security risks:** no transactions anywhere; `toMysqlDateTime` writes malformed timestamps; deleting a work log 500s via FK; local SQLite boot crashes on `information_schema`; `.opencode/logs/*` (2.9 MB) and `data/*-wal/-shm` are git-tracked; no tests/lint/CI; almost no keyboard/ARIA support anywhere.
+
+**Explicitly clean (falsified concerns):** no SQL injection (all values parameterized), no `dangerouslySetInnerHTML`, no polling loops, and `tesseract.js`/`qr-code-styling` are correctly code-split.
+
+Files changed:
+1. `.opencode/plans/review-summary.md` (new; desired filename was permission-blocked)
+## 24/09/2026, 23:10:37
+
+Remediation is next; nothing has been changed yet. Here's the proposed fix plan, ordered by dependency, mapped to the backlog.
+
+## Phase 1 — Stop the bleeding (the 5 Criticals)
+1. `server.js` — login: add rate limit + lockout, reject weak PINs, stop seeding/printing `Admin/0000`; add upload MIME/extension allowlist and serve `/photos` non-executably.
+2. `CardDetailScreen.jsx` — HTML-escape everything written into the print windows; never PUT an invoice when its GET failed.
+3. `CustomersScreen.jsx`, `BoatsScreen.jsx` — drop the extra `/api` prefix in the two delete calls.
+
+## Phase 2 — Data integrity
+4. `server.js` — fix `toMysqlDateTime`; delete `parts_used` before `work_logs`; wrap multi-step writes (card create, boat serials, invoice replace, work loop) in transactions; make `status`/`unwrap_done` editor-only.
+5. `db/mysql.js` + `db/schema.sql` + new `db/migrations/` — real MySQL schema bootstrap + versioned migrations; decide the SQLite shim's fate.
+
+## Phase 3 — Authz, headers, secrets
+6. `server.js` — ownership checks on logs/photos, scope reads, helmet + CSP + rate limits.
+7. `.gitignore` / `git rm --cached` — untrack `.opencode/logs/*` and `data/*-wal,-shm`.
+
+## Phase 4 — UX / a11y / errors
+8. Add error/empty/retry states + error boundary; confirm the hidden cache button; label icon-only controls; keyboard-accessible rows; dialog semantics.
+
+## Phase 5 — Safety net
+9. Add tests for the flows in A2, lint/typecheck, CI; make backups transactional/off-host with a tested restore.
+
+Files changed, edit order (full scope):
+1. `server.js`
+2. `src/screens/CardDetailScreen.jsx`
+3. `src/screens/CustomersScreen.jsx`
+4. `src/screens/BoatsScreen.jsx`
+5. `db/mysql.js`
+6. `db/schema.sql`
+7. `db/migrations/` (new)
+8. `.gitignore`
+9. `src/api.js`
+10. `src/components/*` (Icon, ConfirmLeaveDialog, ToastCtx)
+11. `src/screens/*` (a11y/error states)
+12. `package.json` + CI config (new)
+
+One decision before I write any code:
+## 24/09/2026, 23:11:52
+
+Locked in: Phase 1 only, and Phase 2 will go MySQL-only (drop `db/sqlite.js`). Nothing changed yet.
+
+## Phase 1 — finalized plan (ready to execute on exit)
+
+**1. `server.js` — auth hardening**
+- Delete the `Admin/0000` seed (`:201-205`) and the `Default admin PIN: 0000` log (`:1103`). On an empty DB, require `ADMIN_PIN` from env (validated); if unset, generate a random 6-digit PIN and print it once.
+- Add an in-memory login limiter (per-IP + per-account) with lockout/backoff around `/api/auth/login` (`:268-280`). No new dependency; note it's per-instance.
+- Keep 4-digit UI for now (lockout makes it tolerable); flag 6-digit as a follow-up since it needs `LoginScreen.jsx` changes.
+
+**2. `server.js` — upload / photo serving**
+- Add a multer `fileFilter` allowlisting image MIME + extensions (`jpg/jpeg/png/webp/heic`) at `:228-235`; reject others with 400.
+- Serve `/photos` via `express.static(PHOTOS_DIR, { setHeaders })` (`:222`) adding `X-Content-Type-Options: nosniff` and a locked-down CSP, so an uploaded file can never execute as same-origin HTML.
+
+**3. `src/screens/CardDetailScreen.jsx` — XSS + invoice loss**
+- Add an `esc()` helper and escape every interpolated value in both print templates (`:1531`, `:1948`).
+- Stop the invoice overwrite: don't swallow the initial GET to `{items:[]}` (`:103-120`); track a load-error state, block `saveInvoice` until a successful reload, and show a retry.
+
+**4. `src/screens/CustomersScreen.jsx:79`, `src/screens/BoatsScreen.jsx:252`**
+- Change `api('DELETE', '/api/customers/…')` → `'/customers/…'` and `'/api/boats/…'` → `'/boats/…'`.
+
+**Verification (no suite exists, so manual):** 6 bad PINs → locked out; upload `.html` → 400; invoice with `<img onerror>` in a customer/boat name prints inert; delete customer and delete boat both succeed.
+
+Deferred by your choice: transactions/timestamps/migrations, authz/CSP/helmet, secret untracking, UX/a11y, tests/CI/backups (Phases 2–5).
+
+Files changed, edit order:
+1. `server.js`
+2. `src/screens/CardDetailScreen.jsx`
+3. `src/screens/CustomersScreen.jsx`
+4. `src/screens/BoatsScreen.jsx`
+
+Exit plan mode when you're ready and I'll implement exactly this.
