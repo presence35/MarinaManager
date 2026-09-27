@@ -118,7 +118,7 @@ module.exports = async function createApp() {
     // Index already exists, ignore
   }
 
-  const SERIAL_TYPES = ['engine', 'hull', 'outdrive', 'trailer', 'other'];
+  const SERIAL_TYPES = ['engine', 'hull', 'transmission', 'bellhousing'];
 
   function generateCustomerToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
