@@ -11,6 +11,51 @@ function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
 
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const CARD_STATUSES = ['intake', 'fall_checklist', 'storage', 'spring_checklist', 'service', 'cleaning', 'ready', 'invoiced', 'archived'];
+
+// Reject invalid input at the boundary so bad data never reaches the DB.
+function asString(value, name, { max = 255, required = false } = {}) {
+  if (value === undefined) return undefined;
+  if (value === null) { if (required) throw new HttpError(400, `${name} is required`); return null; }
+  if (typeof value !== 'string') throw new HttpError(400, `${name} must be text`);
+  const trimmed = value.trim();
+  if (required && !trimmed) throw new HttpError(400, `${name} is required`);
+  if (trimmed.length > max) throw new HttpError(400, `${name} must be ${max} characters or fewer`);
+  return trimmed;
+}
+
+function asNumber(value, name, { min = -Infinity, max = Infinity, integer = false } = {}) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) throw new HttpError(400, `${name} must be a number`);
+  if (integer && !Number.isInteger(n)) throw new HttpError(400, `${name} must be a whole number`);
+  if (n < min || n > max) throw new HttpError(400, `${name} must be between ${min} and ${max}`);
+  return n;
+}
+
+function asEnum(value, name, allowed) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  if (!allowed.includes(value)) throw new HttpError(400, `${name} must be one of: ${allowed.join(', ')}`);
+  return value;
+}
+
+function asFlag(value, name) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (value === 0 || value === 1 || value === '0' || value === '1') return Number(value);
+  throw new HttpError(400, `${name} must be true or false`);
+}
+
 module.exports = async function createApp() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -212,6 +257,13 @@ module.exports = async function createApp() {
     console.log('  Default customer, boat, and service card seeded');
   }
 
+  app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+  });
   app.use(express.json({ limit: '10mb' }));
   const staticDir = path.join(__dirname, 'dist');
   if (!fs.existsSync(staticDir)) {
@@ -221,20 +273,33 @@ module.exports = async function createApp() {
   app.get('/robots.txt', (req, res) =>
     res.sendFile(path.join(__dirname, 'public', 'robots.txt')));
   app.use(express.static(staticDir));
-  app.use('/photos', express.static(PHOTOS_DIR));
+  app.use('/photos', (req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); next(); }, express.static(PHOTOS_DIR));
   app.use('/photos', (req, res) => res.status(404).send('Not found'));
 
   app.get('/_health/liveness', (req, res) => res.json({ status: 'ok' }));
   app.get('/_health/readiness', (req, res) => res.json({ status: 'ok' }));
 
+  const IMAGE_MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+  // Raster images are safe to serve; SVG can carry script, so it is excluded.
+  const isSafeImage = (mimetype) => typeof mimetype === 'string' && mimetype.startsWith('image/') && mimetype !== 'image/svg+xml';
   const storage = multer.diskStorage({
     destination: PHOTOS_DIR,
     filename: (req, file, cb) => {
       const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      cb(null, unique + path.extname(file.originalname).toLowerCase());
+      // Derive the extension from the mimetype, never from the client filename.
+      cb(null, unique + (IMAGE_MIME_EXT[file.mimetype] || '.bin'));
     }
   });
-  const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+  const upload = multer({
+    storage,
+    limits: { fileSize: 25 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (!isSafeImage(file.mimetype)) {
+        return cb(new HttpError(400, 'Only image files are allowed'));
+      }
+      cb(null, true);
+    },
+  });
 
   function hashPin(pin) {
     return crypto.createHash('sha256').update(String(pin)).digest('hex');
@@ -344,12 +409,18 @@ module.exports = async function createApp() {
   }));
 
   app.post('/api/customers', requireEditor, asyncHandler(async (req, res) => {
-    const { name, address = null, city = null, postal_code = null, phone = null, email = null } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name required' });
+    const { name, address, city, postal_code, phone, email } = req.body;
+    const nameV = asString(name, 'name', { max: 255, required: true });
+    const addressV = asString(address, 'address', { max: 500 });
+    const cityV = asString(city, 'city', { max: 100 });
+    const postalV = asString(postal_code, 'postal_code', { max: 20 });
+    const phoneV = asString(phone, 'phone', { max: 50 });
+    const emailV = asString(email, 'email', { max: 255 });
+    if (!nameV) return res.status(400).json({ error: 'Name required' });
     
     // Check for existing customer by email OR phone (unique identifiers)
-    const existingByEmail = email ? await db.prepare('SELECT id FROM customers WHERE email = ? AND deleted_at IS NULL').get(email) : null;
-    const existingByPhone = phone ? await db.prepare('SELECT id FROM customers WHERE phone = ? AND deleted_at IS NULL').get(phone) : null;
+    const existingByEmail = emailV ? await db.prepare('SELECT id FROM customers WHERE email = ? AND deleted_at IS NULL').get(emailV) : null;
+    const existingByPhone = phoneV ? await db.prepare('SELECT id FROM customers WHERE phone = ? AND deleted_at IS NULL').get(phoneV) : null;
     const existing = existingByEmail || existingByPhone;
     
     if (existing) {
@@ -359,20 +430,25 @@ module.exports = async function createApp() {
       });
     }
     
-    const r = await db.prepare(`INSERT INTO customers (name, address, city, postal_code, phone, email) VALUES (?, ?, ?, ?, ?, ?)`).run(name, address, city, postal_code, phone, email);
-    res.json({ id: r.lastInsertRowid, name, phone });
+    const r = await db.prepare(`INSERT INTO customers (name, address, city, postal_code, phone, email) VALUES (?, ?, ?, ?, ?, ?)`).run(nameV, addressV, cityV, postalV, phoneV, emailV);
+    res.json({ id: r.lastInsertRowid, name: nameV, phone: phoneV });
   }));
 
   app.put('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
     const { name, address, city, postal_code, phone, email } = req.body;
+    const vals = {
+      name: asString(name, 'name', { max: 255, required: true }),
+      address: asString(address, 'address', { max: 500 }),
+      city: asString(city, 'city', { max: 100 }),
+      postal_code: asString(postal_code, 'postal_code', { max: 20 }),
+      phone: asString(phone, 'phone', { max: 50 }),
+      email: asString(email, 'email', { max: 255 }),
+    };
     const updates = [];
     const params = [];
-    if (name !== undefined) { updates.push('name = ?'); params.push(name); }
-    if (address !== undefined) { updates.push('address = ?'); params.push(address); }
-    if (city !== undefined) { updates.push('city = ?'); params.push(city); }
-    if (postal_code !== undefined) { updates.push('postal_code = ?'); params.push(postal_code); }
-    if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
-    if (email !== undefined) { updates.push('email = ?'); params.push(email); }
+    for (const key of Object.keys(vals)) {
+      if (req.body[key] !== undefined) { updates.push(`${key} = ?`); params.push(vals[key]); }
+    }
     if (updates.length) {
       params.push(req.params.id);
       await db.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id=?`).run(...params);
@@ -381,8 +457,8 @@ module.exports = async function createApp() {
   }));
 
   app.delete('/api/customers/:id', requireEditor, asyncHandler(async (req, res) => {
-    // Soft delete: set deleted_at timestamp
-    await db.prepare('UPDATE customers SET deleted_at = datetime(\'now\') WHERE id = ?').run(req.params.id);
+    // Soft delete: set deleted_at timestamp (portable, not SQLite-specific)
+    await db.prepare('UPDATE customers SET deleted_at = ? WHERE id = ?').run(new Date().toISOString(), req.params.id);
     res.json({ ok: true });
   }));
 
@@ -404,14 +480,16 @@ module.exports = async function createApp() {
   }
 
   function normalizeSerials(serials) {
-    if (!Array.isArray(serials)) return [];
+    if (serials === undefined || serials === null) return [];
+    if (!Array.isArray(serials)) throw new HttpError(400, 'serials must be an array');
     return serials
-      .filter(s => s && s.serial_number && String(s.serial_number).trim())
+      .filter(s => s && typeof s === 'object')
       .map(s => ({
         type: SERIAL_TYPES.includes(s.type) ? s.type : 'other',
-        serial_number: String(s.serial_number).trim(),
-        notes: s.notes ? String(s.notes).trim() : null,
-      }));
+        serial_number: asString(s.serial_number, 'serial_number', { max: 255, required: true }),
+        notes: asString(s.notes, 'serial notes', { max: 1000 }) || null,
+      }))
+      .filter(s => s.serial_number);
   }
 
   app.get('/api/boats', requireAuth, asyncHandler(async (req, res) => {
@@ -440,11 +518,19 @@ module.exports = async function createApp() {
     try {
       const { customer_id, name = null, motor_type = null, model = null, licence = null, trailer_licence = null, rate_type = 'SW', length_ft = null, serials } = req.body;
       if (!customer_id) return res.status(400).json({ error: 'Customer required' });
+      const nameV = asString(name, 'name', { max: 255 });
+      const motorV = asString(motor_type, 'motor_type', { max: 255 });
+      const modelV = asString(model, 'model', { max: 255 });
+      const licenceV = asString(licence, 'licence', { max: 100 });
+      const trailerLicenceV = asString(trailer_licence, 'trailer_licence', { max: 100 });
+      const rateV = asEnum(rate_type, 'rate_type', ['SW', 'DW']) || 'SW';
+      const lengthV = asNumber(length_ft, 'length_ft', { min: 0, max: 100000 });
+      const serialsV = normalizeSerials(serials);
       
       // Check for existing boat under this customer (case-insensitive)
       const existing = await db.prepare(
         'SELECT id FROM boats WHERE customer_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL'
-      ).get(customer_id, name);
+      ).get(customer_id, nameV);
       if (existing) {
         return res.status(409).json({ 
           error: 'Boat with this name already exists for this customer', 
@@ -454,16 +540,16 @@ module.exports = async function createApp() {
       
       const r = await db.prepare(`INSERT INTO boats (customer_id, name, motor_type, model, licence, trailer_licence, rate_type, length_ft) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
         customer_id,
-        name || null,
-        motor_type || null,
-        model || null,
-        licence || null,
-        trailer_licence || null,
-        rate_type || 'SW',
-        length_ft || null
+        nameV,
+        motorV,
+        modelV,
+        licenceV,
+        trailerLicenceV,
+        rateV,
+        lengthV
       );
       const boatId = r.lastInsertRowid;
-      for (const s of normalizeSerials(serials)) {
+      for (const s of serialsV) {
         await db.prepare('INSERT INTO boat_serials (boat_id, type, serial_number, notes) VALUES (?, ?, ?, ?)').run(boatId, s.type, s.serial_number, s.notes);
       }
       res.json({ id: boatId });
@@ -487,22 +573,31 @@ module.exports = async function createApp() {
     if (!existingBoat) return res.status(404).json({ error: 'Not found' });
     
     const { name, motor_type, model, licence, trailer_licence, rate_type, length_ft, serials } = req.body;
+    const nameV = asString(name, 'name', { max: 255 });
+    const motorV = asString(motor_type, 'motor_type', { max: 255 });
+    const modelV = asString(model, 'model', { max: 255 });
+    const licenceV = asString(licence, 'licence', { max: 100 });
+    const trailerLicenceV = asString(trailer_licence, 'trailer_licence', { max: 100 });
+    const rateV = asEnum(rate_type, 'rate_type', ['SW', 'DW']);
+    const lengthV = asNumber(length_ft, 'length_ft', { min: 0, max: 100000 });
+    const serialsV = serials === undefined ? undefined : normalizeSerials(serials);
+
     const updates = [];
     const params = [];
-    if (name !== undefined) { updates.push('name = ?'); params.push(name || null); }
-    if (motor_type !== undefined) { updates.push('motor_type = ?'); params.push(motor_type || null); }
-    if (model !== undefined) { updates.push('model = ?'); params.push(model || null); }
-    if (licence !== undefined) { updates.push('licence = ?'); params.push(licence || null); }
-    if (trailer_licence !== undefined) { updates.push('trailer_licence = ?'); params.push(trailer_licence || null); }
-    if (rate_type !== undefined) { updates.push('rate_type = ?'); params.push(rate_type || 'SW'); }
-    if (length_ft !== undefined) { updates.push('length_ft = ?'); params.push(length_ft || null); }
+    if (name !== undefined) { updates.push('name = ?'); params.push(nameV); }
+    if (motor_type !== undefined) { updates.push('motor_type = ?'); params.push(motorV); }
+    if (model !== undefined) { updates.push('model = ?'); params.push(modelV); }
+    if (licence !== undefined) { updates.push('licence = ?'); params.push(licenceV); }
+    if (trailer_licence !== undefined) { updates.push('trailer_licence = ?'); params.push(trailerLicenceV); }
+    if (rate_type !== undefined) { updates.push('rate_type = ?'); params.push(rateV || 'SW'); }
+    if (length_ft !== undefined) { updates.push('length_ft = ?'); params.push(lengthV); }
     if (updates.length) {
       params.push(req.params.id);
       await db.prepare(`UPDATE boats SET ${updates.join(', ')} WHERE id=?`).run(...params);
     }
-    if (serials !== undefined) {
+    if (serialsV !== undefined) {
       await db.prepare('DELETE FROM boat_serials WHERE boat_id = ?').run(req.params.id);
-      for (const s of normalizeSerials(serials)) {
+      for (const s of serialsV) {
         await db.prepare('INSERT INTO boat_serials (boat_id, type, serial_number, notes) VALUES (?, ?, ?, ?)').run(req.params.id, s.type, s.serial_number, s.notes);
       }
     }
@@ -665,22 +760,40 @@ module.exports = async function createApp() {
        if (hasProtected) return res.status(403).json({ error: 'Only admin and office can edit relevant data' });
     }
 
-    let computedLoc = storage_location;
-    if (storage_type === 'storage_building' && (storage_building || storage_row || storage_col)) {
+    const statusV = asEnum(status, 'status', CARD_STATUSES);
+    const storageTypeV = asString(storage_type, 'storage_type', { max: 50 });
+    const storageLocV = asString(storage_location, 'storage_location', { max: 255 });
+    const storageBuildingV = asString(storage_building, 'storage_building', { max: 100 });
+    const storageRowV = asString(storage_row, 'storage_row', { max: 20 });
+    const storageColV = asString(storage_col, 'storage_col', { max: 20 });
+    const boathouseV = asNumber(boathouse_no, 'boathouse_no', { min: 0, max: 100000, integer: true });
+    const slipV = asNumber(slip_no, 'slip_no', { min: 0, max: 100000, integer: true });
+    const wrapV = asFlag(wrap_required, 'wrap_required');
+    const unwrapV = asFlag(unwrap_done, 'unwrap_done');
+    const scannedV = asFlag(is_scanned, 'is_scanned');
+    const remarksV = asString(remarks, 'remarks', { max: 5000 });
+    const otherWorkV = asString(other_work, 'other_work', { max: 5000 });
+    const dateOutV = asString(date_out, 'date_out', { max: 32 });
+    const invoiceV = asString(invoice_number, 'invoice_number', { max: 100 });
+    const woV = asString(work_order_no, 'work_order_no', { max: 100 });
+    const pickupV = asString(pickup_delivery, 'pickup_delivery', { max: 255 });
+
+    let computedLoc = storageLocV;
+    if (storageTypeV === 'storage_building' && (storageBuildingV || storageRowV || storageColV)) {
       const parts = [];
-      if (storage_building) parts.push(storage_building);
-      if (storage_row) parts.push('Row ' + storage_row);
-      if (storage_col) parts.push('Column ' + storage_col);
+      if (storageBuildingV) parts.push(storageBuildingV);
+      if (storageRowV) parts.push('Row ' + storageRowV);
+      if (storageColV) parts.push('Column ' + storageColV);
       computedLoc = parts.join(', ');
-    } else if ((storage_type === 'marina_boathouse' || storage_type === 'customer_boathouse') && (boathouse_no || slip_no)) {
+    } else if ((storageTypeV === 'marina_boathouse' || storageTypeV === 'customer_boathouse') && (boathouseV || slipV)) {
       const parts = [];
-      if (boathouse_no) parts.push('Boathouse ' + boathouse_no);
-      if (slip_no) parts.push('Slip ' + slip_no);
+      if (boathouseV) parts.push('Boathouse ' + boathouseV);
+      if (slipV) parts.push('Slip ' + slipV);
       computedLoc = parts.join(', ');
     }
 
-    if (status && status !== card.status) {
-      await db.prepare('INSERT INTO status_history (card_id, from_status, to_status, employee_id) VALUES (?, ?, ?, ?)').run(id, card.status, status, req.employee.id);
+    if (statusV && statusV !== card.status) {
+      await db.prepare('INSERT INTO status_history (card_id, from_status, to_status, employee_id) VALUES (?, ?, ?, ?)').run(id, card.status, statusV, req.employee.id);
     }
     await db.prepare(`UPDATE service_cards SET
       status = COALESCE(?, status), storage_type = COALESCE(?, storage_type),
@@ -698,7 +811,7 @@ module.exports = async function createApp() {
       pickup_delivery = ?,
       is_scanned = COALESCE(?, is_scanned),
       updated_at = NOW()
-      WHERE id = ?`).run(status ?? null, storage_type ?? null, computedLoc ?? null, storage_building || null, storage_row || null, storage_col || null, boathouse_no ? Number(boathouse_no) : null, slip_no ? Number(slip_no) : null, wrap_required != null ? (wrap_required ? 1 : 0) : null, unwrap_done != null ? (unwrap_done ? 1 : 0) : null, remarks ?? null, other_work ?? null, date_out ?? null, invoice_number ?? null, work_order_no ?? null, pickup_delivery ?? null, is_scanned != null ? (is_scanned ? 1 : 0) : null, id);
+      WHERE id = ?`).run(statusV ?? null, storageTypeV ?? null, computedLoc ?? null, storageBuildingV ?? null, storageRowV ?? null, storageColV ?? null, boathouseV ?? null, slipV ?? null, wrapV ?? null, unwrapV ?? null, remarksV ?? null, otherWorkV ?? null, dateOutV ?? null, invoiceV ?? null, woV ?? null, pickupV ?? null, scannedV ?? null, id);
     res.json({ ok: true });
   }));
 
@@ -1085,8 +1198,11 @@ module.exports = async function createApp() {
   });
 
   app.use((err, req, res, next) => {
-    console.error('[ERROR]', err);
-    res.status(500).json({ error: 'Internal server error' });
+    if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });
+    if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'Payload too large' });
+    const status = err && (err.status || err.statusCode) ? (err.status || err.statusCode) : 500;
+    if (status >= 500) console.error('[ERROR]', err);
+    res.status(status).json({ error: status >= 500 ? 'Internal server error' : (err.message || 'Bad request') });
   });
 
   app.db = db;
