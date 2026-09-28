@@ -34,8 +34,15 @@ export default function SettingsScreen() {
     if (!res.ok) return alert('Export failed')
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = `marina-backup-${new Date().toISOString().split('T')[0]}.zip`; a.click()
-    URL.revokeObjectURL(url)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `marina-backup-${new Date().toISOString().split('T')[0]}.zip`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Revoke only after the download has had time to start reading the blob;
+    // revoking immediately aborts it (NS_BINDING_ABORTED in Firefox).
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
   }
 
   async function clearCache() {
