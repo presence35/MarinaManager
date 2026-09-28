@@ -218,6 +218,8 @@ module.exports = async function createApp() {
     console.error('  Build not found. Run "npm run build" first.');
     process.exit(1);
   }
+  app.get('/robots.txt', (req, res) =>
+    res.sendFile(path.join(__dirname, 'public', 'robots.txt')));
   app.use(express.static(staticDir));
   app.use('/photos', express.static(PHOTOS_DIR));
   app.use('/photos', (req, res) => res.status(404).send('Not found'));
