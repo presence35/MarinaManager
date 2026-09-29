@@ -56,6 +56,24 @@ function asFlag(value, name) {
   throw new HttpError(400, `${name} must be true or false`);
 }
 
+// Simple in-memory fixed-window rate limiter, keyed by client IP.
+function makeRateLimiter({ windowMs, max }) {
+  const hits = new Map();
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip || 'unknown';
+    let rec = hits.get(key);
+    if (!rec || now > rec.reset) { rec = { count: 0, reset: now + windowMs }; hits.set(key, rec); }
+    rec.count += 1;
+    if (rec.count > max) {
+      res.set('Retry-After', String(Math.max(1, Math.ceil((rec.reset - now) / 1000))));
+      return res.status(429).json({ error: 'Too many requests, please slow down' });
+    }
+    if (hits.size > 5000) { for (const [k, v] of hits) if (now > v.reset) hits.delete(k); }
+    next();
+  };
+}
+
 module.exports = async function createApp() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -243,10 +261,18 @@ module.exports = async function createApp() {
     console.log('  Default service item templates seeded');
   }
 
+  try {
+    await db.exec("ALTER TABLE employees ADD COLUMN pin_salt TEXT");
+    console.log("  Added pin_salt column to employees");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   const empCount = await db.prepare('SELECT COUNT(*) as c FROM employees').get();
   if (empCount.c === 0) {
-    const pinHash = crypto.createHash('sha256').update('0000').digest('hex');
-    await db.prepare(`INSERT INTO employees (name, role, initials, pin_hash) VALUES ('Admin', 'admin', 'AD', ?)`).run(pinHash);
+    const salt = newPinSalt();
+    const pinHash = hashPin('0000', salt);
+    await db.prepare(`INSERT INTO employees (name, role, initials, pin_hash, pin_salt) VALUES ('Admin', 'admin', 'AD', ?, ?)`).run(pinHash, salt);
     console.log('  Default admin created — PIN: 0000');
 
     const custRes = await db.prepare(`INSERT INTO customers (name, phone, email) VALUES ('John Doe', '555-0101', 'john@example.com')`).run();
@@ -258,12 +284,15 @@ module.exports = async function createApp() {
   }
 
   app.disable('x-powered-by');
+  app.set('trust proxy', true);
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'no-referrer');
     next();
   });
+  const loginLimiter = makeRateLimiter({ windowMs: 10 * 60 * 1000, max: 30 });
+  const publicLimiter = makeRateLimiter({ windowMs: 60 * 1000, max: 100 });
   app.use(express.json({ limit: '10mb' }));
   const staticDir = path.join(__dirname, 'dist');
   if (!fs.existsSync(staticDir)) {
@@ -301,8 +330,21 @@ module.exports = async function createApp() {
     },
   });
 
-  function hashPin(pin) {
-    return crypto.createHash('sha256').update(String(pin)).digest('hex');
+  function newPinSalt() {
+    return crypto.randomBytes(16).toString('hex');
+  }
+
+  // Salted PBKDF2. With no salt, falls back to the legacy unsalted SHA-256 (used only to
+  // verify and then upgrade existing rows on next login).
+  function hashPin(pin, salt) {
+    if (!salt) return crypto.createHash('sha256').update(String(pin)).digest('hex');
+    return crypto.pbkdf2Sync(String(pin), salt, 100000, 32, 'sha256').toString('hex');
+  }
+
+  function verifyPin(pin, pinHash, pinSalt) {
+    const candidate = Buffer.from(hashPin(pin, pinSalt), 'hex');
+    const stored = Buffer.from(String(pinHash), 'hex');
+    return candidate.length === stored.length && crypto.timingSafeEqual(candidate, stored);
   }
 
   function requireAuth(req, res, next) {
@@ -332,10 +374,21 @@ module.exports = async function createApp() {
     });
   }
 
-  app.post('/api/auth/login', asyncHandler(async (req, res) => {
+  app.post('/api/auth/login', loginLimiter, asyncHandler(async (req, res) => {
     const { pin } = req.body;
     if (!pin) return res.status(400).json({ error: 'PIN required' });
-    const emp = await db.prepare('SELECT * FROM employees WHERE pin_hash = ? AND active = 1').get(hashPin(pin));
+    const employees = await db.prepare('SELECT * FROM employees WHERE active = 1').all();
+    let emp = null;
+    for (const e of employees) {
+      if (!verifyPin(pin, e.pin_hash, e.pin_salt)) continue;
+      emp = e;
+      if (!e.pin_salt) {
+        // Upgrade legacy unsalted hashes on first successful login.
+        const salt = newPinSalt();
+        await db.prepare('UPDATE employees SET pin_hash = ?, pin_salt = ? WHERE id = ?').run(hashPin(pin, salt), salt, e.id);
+      }
+      break;
+    }
     if (!emp) return res.status(401).json({ error: 'Invalid PIN' });
     const token = crypto.randomBytes(32).toString('hex');
     await db.prepare('INSERT INTO device_tokens (token, employee_id) VALUES (?, ?)').run(token, emp.id);
@@ -365,7 +418,8 @@ module.exports = async function createApp() {
     const { name, role, initials, pin } = req.body;
     if (!name || !pin) return res.status(400).json({ error: 'Name and PIN required' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be 4 digits' });
-    const r = await db.prepare('INSERT INTO employees (name, role, initials, pin_hash) VALUES (?, ?, ?, ?)').run(name, role || 'mechanic', initials || name.slice(0, 2).toUpperCase(), hashPin(pin));
+    const salt = newPinSalt();
+    const r = await db.prepare('INSERT INTO employees (name, role, initials, pin_hash, pin_salt) VALUES (?, ?, ?, ?, ?)').run(name, role || 'mechanic', initials || name.slice(0, 2).toUpperCase(), hashPin(pin, salt), salt);
     res.json({ id: r.lastInsertRowid, name, role: role || 'mechanic' });
   }));
 
@@ -379,7 +433,9 @@ module.exports = async function createApp() {
     if (initials !== undefined) { updates.push('initials = ?'); params.push(initials); }
     if (pin !== undefined) {
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be 4 digits' });
-      updates.push('pin_hash = ?'); params.push(hashPin(pin));
+      const salt = newPinSalt();
+      updates.push('pin_hash = ?'); params.push(hashPin(pin, salt));
+      updates.push('pin_salt = ?'); params.push(salt);
     }
     if (active !== undefined) {
       updates.push('active = ?'); params.push(active ? 1 : 0);
@@ -706,6 +762,12 @@ module.exports = async function createApp() {
   app.post('/api/cards', requireEditor, asyncHandler(async (req, res) => {
     const { boat_id, season_year, work_order_no, storage_type, wrap_required, remarks, other_work, date_in, storage_building, storage_row, storage_col, boathouse_no, slip_no, is_fake, is_scanned } = req.body;
     if (!boat_id) return res.status(400).json({ error: 'Boat required' });
+
+    const season = Number(season_year) || new Date().getFullYear();
+    if (!is_scanned) {
+      const dupe = await db.prepare("SELECT id FROM service_cards WHERE boat_id = ? AND season_year = ? AND status NOT IN ('invoiced', 'archived')").get(boat_id, season);
+      if (dupe) return res.status(409).json({ error: 'This boat already has an active card this season', id: dupe.id });
+    }
 
     let storage_location = null;
     if (storage_type === 'storage_building' && (storage_building || storage_row || storage_col)) {
@@ -1119,7 +1181,7 @@ module.exports = async function createApp() {
     res.json({ version });
   });
 
-  app.get('/api/public/card/:token', asyncHandler(async (req, res) => {
+  app.get('/api/public/card/:token', publicLimiter, asyncHandler(async (req, res) => {
     const card = await db.prepare(`
       SELECT sc.id, sc.work_order_no, sc.status, sc.season_year, sc.storage_type, sc.storage_location,
              sc.wrap_required, sc.remarks, sc.other_work, sc.date_in, sc.date_out,
