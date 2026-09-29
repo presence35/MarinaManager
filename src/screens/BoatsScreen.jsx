@@ -78,11 +78,11 @@ export default function BoatsScreen({ params }) {
 
   const navigateToBoatCard = async (boat) => {
     try {
-      const cards = await api('GET', `/cards?q=${encodeURIComponent(boat.name)}`)
-      const active = cards.find(c => c.boat_id === boat.id && !['invoiced', 'archived'].includes(c.status))
-      if (active) navigate('card', { id: active.id })
-      else navigate('customer-detail', { id: boat.customer_id })
-    } catch (e) { navigate('customer-detail', { id: boat.customer_id }) }
+      const cards = await api('GET', `/cards?boat_id=${boat.id}`)
+      const active = (cards || []).find(c => !['invoiced', 'archived'].includes(c.status))
+      if (active) return navigate('card', { id: active.id })
+    } catch (e) { /* fall through to the customer page */ }
+    navigate('customer-detail', { customerId: boat.customer_id, customerName: boat.customer_name })
   }
 
   const saveBoat = async () => {

@@ -14,13 +14,14 @@ export default function CustomerDetailScreen({ params = {} }) {
   const [selectedBoat, setSelectedBoat] = useState(null)
 
   useEffect(() => {
+    if (!params.customerId) { setLoading(false); return }
     setLoading(true)
     Promise.all([
       api('GET', `/customers/${params.customerId}`),
-      api('GET', `/cards?q=${encodeURIComponent(params.customerName)}`),
+      params.customerName ? api('GET', `/cards?q=${encodeURIComponent(params.customerName)}`) : Promise.resolve([]),
     ]).then(([cust, cardsData]) => {
       setCustomer(cust)
-      setCards(cardsData.filter(c => c.customer_name === params.customerName))
+      setCards((cardsData || []).filter(c => !params.customerName || c.customer_name === params.customerName))
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [params.customerId, params.customerName])
@@ -28,7 +29,12 @@ export default function CustomerDetailScreen({ params = {} }) {
   const filteredCards = selectedBoat ? cards.filter(c => c.boat_name === selectedBoat) : cards
 
   if (loading) return <div style={{ padding: 20 }}><div className="shimmer" style={{ height: 200, borderRadius: 'var(--r)' }} /></div>
-  if (!customer) return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>Customer not found</div>
+  if (!customer) return (
+    <div style={{ padding: 24, textAlign: 'center' }}>
+      <div style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, color: 'var(--text2)', marginBottom: 12, letterSpacing: 0.3 }}>Customer not found</div>
+      <button className="btn btn-outline" style={{ width: 'auto', margin: '0 auto' }} onClick={() => navigate('customers')}>Back to customers</button>
+    </div>
+  )
 
   return (
     <div>

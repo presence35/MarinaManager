@@ -556,7 +556,7 @@ module.exports = async function createApp() {
         SELECT b.*, c.name as customer_name 
         FROM boats b 
         LEFT JOIN customers c ON b.customer_id = c.id 
-        WHERE b.name LIKE ? OR c.name LIKE ? 
+        WHERE b.deleted_at IS NULL AND (b.name LIKE ? OR c.name LIKE ?) 
         ORDER BY b.name LIMIT 30
       `).all(`%${q}%`, `%${q}%`);
       res.json(await attachSerials(rows));
@@ -565,6 +565,7 @@ module.exports = async function createApp() {
         SELECT b.*, c.name as customer_name 
         FROM boats b 
         LEFT JOIN customers c ON b.customer_id = c.id 
+        WHERE b.deleted_at IS NULL
         ORDER BY b.name
       `).all();
       res.json(await attachSerials(rows));
@@ -661,6 +662,12 @@ module.exports = async function createApp() {
     res.json({ ok: true });
   }));
 
+  app.delete('/api/boats/:id', requireEditor, asyncHandler(async (req, res) => {
+    // Soft delete: set deleted_at timestamp (portable)
+    await db.prepare('UPDATE boats SET deleted_at = ? WHERE id = ?').run(new Date().toISOString(), req.params.id);
+    res.json({ ok: true });
+  }));
+
   app.put('/api/boats/:id/restore', requireEditor, asyncHandler(async (req, res) => {
     await db.prepare('UPDATE boats SET deleted_at = NULL WHERE id = ?').run(req.params.id);
     res.json({ ok: true });
@@ -716,11 +723,12 @@ module.exports = async function createApp() {
   `;
 
   app.get('/api/cards', requireAuth, asyncHandler(async (req, res) => {
-    const { status, season, q, scanned } = req.query;
+    const { status, season, q, scanned, boat_id } = req.query;
     let where = 'WHERE 1=1';
     const params = [];
     if (status && status !== 'all') { where += ' AND sc.status = ?'; params.push(status); }
     if (season) { where += ' AND sc.season_year = ?'; params.push(season); }
+    if (boat_id) { where += ' AND sc.boat_id = ?'; params.push(boat_id); }
     if (scanned === '1') { where += ' AND sc.is_scanned = 1'; }
     if (q) { where += ' AND (c.name LIKE ? OR b.name LIKE ? OR sc.work_order_no LIKE ? OR b.licence LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
     res.json(await db.prepare(`${CARD_SELECT}${where} ORDER BY sc.updated_at DESC`).all(...params));
