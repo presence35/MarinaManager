@@ -26,6 +26,8 @@ export default defineConfig({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // Lazy-loaded HEIC decoder: fetched on demand, not precached.
+        globIgnores: ['**/heic2any-*.js'],
       },
     }),
   ],

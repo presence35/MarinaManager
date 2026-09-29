@@ -5,6 +5,7 @@ import { AuthCtx } from '../contexts/AuthCtx'
 import { api } from '../api'
 import { RECEIVED_ITEMS, AUTHORIZED_WORK } from '../constants'
 import Icon from '../components/Icon'
+import { compressImage } from '../lib/image'
 
 function parseOcrText(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
@@ -329,9 +330,9 @@ export default function ScanCardScanner() {
       }
 
       if (imageData) {
-        const blob = await (await fetch(imageData)).blob()
+        const raw = await (await fetch(imageData)).blob()
         const fd = new FormData()
-        fd.append('photo', blob, 'scan-reference.jpg')
+        fd.append('photo', await compressImage(raw), 'scan-reference.jpg')
         fd.append('photo_type', 'scan_reference')
         fd.append('caption', 'OCR scan reference')
         await api('POST', `/cards/${card.id}/photos`, fd, true)

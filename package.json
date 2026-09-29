@@ -16,6 +16,7 @@
   "dependencies": {
     "archiver": "^6.0.1",
     "express": "^4.22.2",
+    "heic2any": "^0.0.4",
     "multer": "^2.0.0",
     "mysql2": "^3.22.5",
     "qr-code-styling": "^1.9.2",

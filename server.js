@@ -293,6 +293,7 @@ module.exports = async function createApp() {
   });
   const loginLimiter = makeRateLimiter({ windowMs: 10 * 60 * 1000, max: 30 });
   const publicLimiter = makeRateLimiter({ windowMs: 60 * 1000, max: 100 });
+  const exportTokens = new Map();
   app.use(express.json({ limit: '10mb' }));
   const staticDir = path.join(__dirname, 'dist');
   if (!fs.existsSync(staticDir)) {
@@ -309,22 +310,22 @@ module.exports = async function createApp() {
   app.get('/_health/readiness', (req, res) => res.json({ status: 'ok' }));
 
   const IMAGE_MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
-  // Raster images are safe to serve; SVG can carry script, so it is excluded.
-  const isSafeImage = (mimetype) => typeof mimetype === 'string' && mimetype.startsWith('image/') && mimetype !== 'image/svg+xml';
   const storage = multer.diskStorage({
     destination: PHOTOS_DIR,
     filename: (req, file, cb) => {
       const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
       // Derive the extension from the mimetype, never from the client filename.
-      cb(null, unique + (IMAGE_MIME_EXT[file.mimetype] || '.bin'));
+      cb(null, unique + IMAGE_MIME_EXT[file.mimetype]);
     }
   });
   const upload = multer({
     storage,
     limits: { fileSize: 25 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
-      if (!isSafeImage(file.mimetype)) {
-        return cb(new HttpError(400, 'Only image files are allowed'));
+      // Strict allow-list: SVG/HTML can carry script, and formats like HEIC
+      // would be stored undisplayable. Clients convert to JPEG before upload.
+      if (!IMAGE_MIME_EXT[file.mimetype]) {
+        return cb(new HttpError(400, 'Unsupported image format — use JPEG, PNG, WebP or GIF'));
       }
       cb(null, true);
     },
@@ -1206,11 +1207,11 @@ module.exports = async function createApp() {
     res.json(card);
   }));
 
-  app.get('/api/export', requireAdmin, asyncHandler(async (req, res) => {
+  async function streamExport(res) {
     const archiver = require('archiver');
     res.attachment(`marina-backup-${new Date().toISOString().split('T')[0]}.zip`);
     const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.on('error', err => res.status(500).end());
+    archive.on('error', err => res.destroy(err));
     archive.pipe(res);
 
     const [tables] = await pool.query("SHOW TABLES");
@@ -1235,7 +1236,31 @@ module.exports = async function createApp() {
     archive.append(dump, { name: 'backup.sql' });
 
     if (fs.existsSync(PHOTOS_DIR)) archive.directory(PHOTOS_DIR, 'photos');
-    archive.finalize();
+    await archive.finalize();
+  }
+
+  // Issue a short-lived, single-use token so the browser downloads the export
+  // natively (progress + notification) without a Bearer header on a navigation.
+  app.post('/api/export/token', requireAdmin, (req, res) => {
+    const token = crypto.randomBytes(24).toString('hex');
+    const now = Date.now();
+    for (const [k, v] of exportTokens) if (v < now) exportTokens.delete(k);
+    exportTokens.set(token, now + 60000);
+    res.json({ token });
+  });
+
+  app.get('/api/export/:token', asyncHandler(async (req, res) => {
+    const expiry = exportTokens.get(req.params.token);
+    if (!expiry || expiry < Date.now()) {
+      exportTokens.delete(req.params.token);
+      return res.status(403).json({ error: 'Invalid or expired export token' });
+    }
+    exportTokens.delete(req.params.token);
+    await streamExport(res);
+  }));
+
+  app.get('/api/export', requireAdmin, asyncHandler(async (req, res) => {
+    await streamExport(res);
   }));
 
   app.get('/api/backups', requireAdmin, asyncHandler(async (req, res) => {

@@ -12,6 +12,7 @@ export default function SettingsScreen() {
   const { navigate } = useContext(NavCtx)
   const [version, setVersion] = useState('')
   const [backups, setBackups] = useState([])
+  const [exportStatus, setExportStatus] = useState('')
 
   useEffect(() => {
     fetch('/api/version').then(r => r.json()).then(d => setVersion(d.version)).catch(() => {})
@@ -27,22 +28,23 @@ export default function SettingsScreen() {
   }, [employee])
 
   async function handleExport() {
-    const res = await fetch('/api/export', { headers: { Authorization: `Bearer ${getToken()}` } })
-    if (res.status === 401) {
-      localStorage.removeItem('marina_token'); localStorage.removeItem('marina_employee'); window.location.reload(); return
+    if (exportStatus === 'working') return
+    setExportStatus('working')
+    try {
+      const res = await fetch('/api/export/token', { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } })
+      if (res.status === 401) {
+        localStorage.removeItem('marina_token'); localStorage.removeItem('marina_employee'); window.location.reload(); return
+      }
+      if (!res.ok) throw new Error('token')
+      const { token } = await res.json()
+      // Native browser download: shows progress/notifications and avoids buffering the whole zip in memory.
+      window.location.href = `/api/export/${token}`
+      setExportStatus('started')
+    } catch {
+      setExportStatus('failed')
+    } finally {
+      setTimeout(() => setExportStatus(''), 6000)
     }
-    if (!res.ok) return alert('Export failed')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `marina-backup-${new Date().toISOString().split('T')[0]}.zip`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    // Revoke only after the download has had time to start reading the blob;
-    // revoking immediately aborts it (NS_BINDING_ABORTED in Firefox).
-    setTimeout(() => URL.revokeObjectURL(url), 60000)
   }
 
   async function clearCache() {
@@ -118,11 +120,16 @@ export default function SettingsScreen() {
       {employee?.role === 'admin' && <div className="section-head">Export</div>}
       {employee?.role === 'admin' && (
         <div className="card" style={{ margin: '0 12px' }}>
-          <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}>
+          <button onClick={handleExport} disabled={exportStatus === 'working'} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', width: '100%', background: 'none', border: 'none', cursor: exportStatus === 'working' ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: 'inherit', opacity: exportStatus === 'working' ? 0.6 : 1 }}>
             <Icon name="download" size={18} color="var(--text2)" />
-            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Export Database (ZIP)</span>
-            <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{'\u203A'}</span>
+            <span style={{ fontFamily: 'Barlow Condensed', fontSize: 15, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text)' }}>Export database and images</span>
+            <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 18 }}>{exportStatus === 'working' ? '…' : '\u203A'}</span>
           </button>
+          {exportStatus && (
+            <div style={{ borderTop: '1px solid var(--border)', padding: '8px 16px', fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.3, textTransform: 'uppercase' }}>
+              {exportStatus === 'working' ? 'Preparing export…' : exportStatus === 'started' ? 'Export started — check your downloads' : 'Export failed'}
+            </div>
+          )}
           {backups.length > 0 && (
             <div style={{ borderTop: '1px solid var(--border)', padding: '8px 16px' }}>
               <div style={{ fontFamily: 'Barlow Condensed', fontSize: 12, fontWeight: 600, color: 'var(--text3)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>

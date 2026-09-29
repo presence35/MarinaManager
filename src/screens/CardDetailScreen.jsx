@@ -10,6 +10,7 @@ import {
 } from '../constants'
 import Icon from '../components/Icon'
 import StatusBadge from '../components/StatusBadge'
+import { compressImage } from '../lib/image'
 import ConditionRatingRow from '../components/ConditionRatingRow'
 import SwipeableTask from '../components/SwipeableTask'
 import QrCode from '../components/QrCode'
@@ -192,7 +193,7 @@ function InfoTab({ card, reload, canEdit = true }) {
     const { gpsLat, gpsLng } = gpsCache.current || {}
     try {
       const fd = new FormData()
-      fd.append('photo', file)
+      fd.append('photo', await compressImage(file))
       fd.append('photo_type', 'location')
       fd.append('caption', `Location: ${form.location_notes || card.storage_location || 'Storage location'}`)
       if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
@@ -377,7 +378,7 @@ function InfoTab({ card, reload, canEdit = true }) {
                       <Icon name="map" size={14} />
                     </button>
                   </div>
-                  <input ref={locationPhotoRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                  <input ref={locationPhotoRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style={{ display: 'none' }}
                     onChange={(e) => { if (e.target.files[0]) uploadLocationPhoto(e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
                 </div>
               )}
@@ -665,7 +666,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
     try {
       const { gpsLat, gpsLng } = gpsCache.current || {}
       const fd = new FormData()
-      fd.append('photo', file)
+      fd.append('photo', await compressImage(file))
       fd.append('photo_type', `service_work`)
       fd.append('caption', `Service: ${key}`)
       if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
@@ -792,7 +793,7 @@ function ServiceWorkTab({ card, reload, serviceItems: tmplService, cleaningGroup
                     onClick={() => handleServicePhoto(w.item_key)}>
                     <Icon name="camera" size={12} /> Photo
                   </button>
-                  <input ref={(el) => fileRefs.current[w.item_key] = el} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                  <input ref={(el) => fileRefs.current[w.item_key] = el} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style={{ display: 'none' }}
                     onChange={(e) => { if (e.target.files[0]) uploadPhoto(w.item_key, e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
                 </div>
                 {allPhotos.length > 0 && (
@@ -1236,7 +1237,7 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
     try {
       const { gpsLat, gpsLng } = gpsCache.current || {}
       const fd = new FormData()
-      fd.append('photo', file)
+      fd.append('photo', await compressImage(file))
       fd.append('photo_type', `checklist_${cat}`)
       fd.append('caption', `${activeList} checklist — ${cat}`)
       if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
@@ -1293,7 +1294,7 @@ function ChecklistTab({ card, reload, checklistType, canEdit = true }) {
                   onClick={() => handleCatPhoto(cat.cat)}>
                   <Icon name="camera" size={13} /> Photo
                 </button>
-                <input ref={(el) => fileRefs.current[cat.cat] = el} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                <input ref={(el) => fileRefs.current[cat.cat] = el} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style={{ display: 'none' }}
                   onChange={(e) => { if (e.target.files[0]) uploadCatPhoto(catPhotoKey, e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
               </div>
               {photosForCat.length > 0 && (
@@ -1355,7 +1356,7 @@ function PhotosTab({ card, reload }) {
     try {
       const { gpsLat, gpsLng } = gpsCache.current || {}
       const fd = new FormData()
-      fd.append('photo', file)
+      fd.append('photo', await compressImage(file))
       fd.append('photo_type', photoType)
       if (gpsLat != null) fd.append('gps_lat', String(gpsLat))
       if (gpsLng != null) fd.append('gps_lng', String(gpsLng))
@@ -1403,7 +1404,7 @@ function PhotosTab({ card, reload }) {
           <Icon name="camera" size={16} color={uploading ? 'var(--text2)' : '#fff'} />
           {uploading ? 'Uploading...' : `Add ${formatPhotoType(photoType)} Photo`}
         </button>
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style={{ display: 'none' }}
           onChange={(e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ''; gpsCache.current = null }} />
       </div>
       {!card.photos || card.photos.length === 0 ? (
