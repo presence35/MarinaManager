@@ -349,6 +349,9 @@ module.exports = async function createApp() {
   }
 
   function requireAuth(req, res, next) {
+    // TEMP AUTH BYPASS — delete these 3 lines to restore PIN login
+    req.employee = { id: 1, name: 'Preview Admin', role: 'admin', initials: 'AD' };
+    return next();
     const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     db.prepare('SELECT * FROM device_tokens WHERE token = ?').get(token).then(row => {
